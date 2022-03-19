@@ -6,9 +6,6 @@ import roles
 templates = Jinja2Templates("dist")
 REQUEST = "request"
 
-def favicon(request: Request):
-    return FileResponse("dist/favicon.ico")
-
 def index(request: Request):
     """첫 화면."""
     return templates.TemplateResponse("index.html", {REQUEST: request})

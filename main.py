@@ -38,8 +38,7 @@ routes = [
     Route("/archive", views.archive),
     Route("/patch-note", views.patch_note),
     Route("/admin", views.admin),
-    Route("/favicon.ico", views.favicon),
-    Mount("/assets", StaticFiles(directory="dist/assets")),
+    Mount("/", StaticFiles(directory="dist")),
     WebSocketRoute("/game", ws.game_endpoint),
     WebSocketRoute("/admin", ws.admin_endpoint)
 ]
