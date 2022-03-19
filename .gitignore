@@ -30,3 +30,7 @@ coverage
 # Python
 .venv
 __pycache__
+
+# Game
+.env
+sql/*

@@ -24,7 +24,6 @@ class BasicAuthBackend(AuthenticationBackend):
                 decoded = base64.b64decode(credentials).decode("ascii")
             except (ValueError, UnicodeDecodeError, binascii.Error) as e:
                 raise AuthenticationError("Invalid basic auth credentials")
-            
             username, _, password = decoded.partition(":")
             return AuthCredentials(["Authenticated"]), SimpleUser(username)
 
@@ -38,9 +37,9 @@ routes = [
     Route("/archive", views.archive),
     Route("/patch-note", views.patch_note),
     Route("/admin", views.admin),
-    Mount("/", StaticFiles(directory="dist")),
     WebSocketRoute("/game", ws.game_endpoint),
-    WebSocketRoute("/admin", ws.admin_endpoint)
+    WebSocketRoute("/admin", ws.admin_endpoint),
+    Mount("/", StaticFiles(directory="dist")),
 ]
 middleware = [
     Middleware(AuthenticationMiddleware, backend=BasicAuthBackend())

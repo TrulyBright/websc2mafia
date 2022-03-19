@@ -1,0 +1,163 @@
+Level:
+  EtoK:
+    NONE: 없음
+    BASIC: 기본
+    STRONG: 강력
+    ABSOLUTE: 절대
+Role:
+  KtoE:
+    경호원: Bodyguard
+    검시관: Coroner
+    포고꾼: Crier
+    형사: Detective
+    의사: Doctor
+    기생: Escort
+    탐정: Investigator
+    간수: Jailor
+    감시자: Lookout
+    원수: Marshall
+    비밀조합원: Mason
+    비밀조합장: MasonLeader
+    시장: Mayor
+    보안관: Sheriff
+    정보원: Spy
+    나무 그루터기: Stump
+    퇴역군인: Veteran
+    자경대원: Vigilante
+    판사: Judge
+    회계사: Auditor
+    요술사: WitchDoctor
+    대량학살자: MassMurderer
+    이교: Cult
+    이교도: Cultist
+    기억상실자: Amnesiac
+    처형자: Executioner
+    방화범: Arsonist
+    마녀: Witch
+    인간쓰레기: Scumbag
+    어릿광대: Jester
+    생존자: Survivor
+    연쇄살인마: SerialKiller
+    변호사: Counsel
+    잠입자: Beguiler
+    요원: Agent
+    납치범: Kidnapper
+    협박자: Blackmailer
+    관리인: Janitor
+    조작자: Framer
+    조언자: Consigliere
+    매춘부: Consort
+    대부: Godfather
+    마피아 일원: Mafioso
+    백지선: Administrator
+    사기꾼: Deceiver
+    선봉: Vanguard
+    심문자: Interrogator
+    침묵자: Silencer
+    향주: IncenseMaster
+    위조꾼: Forger
+    간통범: Liaison
+    용두: DragonHead
+    홍곤: Enforcer
+    시민: Citizen
+    마피아: Mafia
+    삼합회: Triad
+    중립: Neutral
+  EtoK:
+    Town: 시민
+    Mafia: 마피아
+    Triad: 삼합회
+    Neutral: 중립
+    Bodyguard: 경호원
+    Citizen: 시민
+    Coroner: 검시관
+    Crier: 포고꾼
+    Detective: 형사
+    Doctor: 의사
+    Escort: 기생
+    Investigator: 탐정
+    Jailor: 간수
+    Lookout: 감시자
+    Marshall: 원수
+    Freemasonry: 비밀조합
+    Mason: 비밀조합원
+    MasonLeader: 비밀조합장
+    Mayor: 시장
+    Sheriff: 보안관
+    Spy: 정보원
+    Stump: 나무 그루터기
+    Veteran: 퇴역군인
+    Vigilante: 자경대원
+    Judge: 판사
+    Auditor: 회계사
+    WitchDoctor: 요술사
+    MassMurderer: 대량학살자
+    Cult: 이교
+    Cultist: 이교도
+    Amnesiac: 기억상실자
+    Executioner: 처형자
+    Arsonist: 방화범
+    Witch: 마녀
+    Scumbag: 인간쓰레기
+    Jester: 어릿광대
+    Survivor: 생존자
+    SerialKiller: 연쇄살인마
+    Counsel: 변호사
+    Beguiler: 잠입자
+    Agent: 요원
+    Kidnapper: 납치범
+    Blackmailer: 협박자
+    Janitor: 관리인
+    Framer: 조작자
+    Consigliere: 조언자
+    Consort: 매춘부
+    Godfather: 대부
+    Mafioso: 마피아 일원
+    Administrator: 백지선
+    Deceiver: 사기꾼
+    Vanguard: 선봉
+    Interrogator: 심문자
+    Silencer: 침묵자
+    IncenseMaster: 향주
+    Forger: 위조꾼
+    Liaison: 간통범
+    DragonHead: 용두
+    Enforcer: 홍곤
+    Jury: 배심원
+    Criminal: 범죄 조직원
+Slot:
+  EtoK:
+    Any: 전체 임의직
+    TownAny: 시민 임의직
+    TownGovernment: 시민 행정직
+    TownProtective: 시민 방어직
+    TownKilling: 시민 살인직
+    TownInvestigative: 시민 조사직
+    TownPower: 시민 능력직
+    MafiaAny: 마피아 임의직
+    MafiaSupport: 마피아 지원직
+    MafiaDeception: 마피아 교란직
+    MafiaKilling: 마피아 살인직
+    TriadAny: 삼합회 임의직
+    TriadSupport: 삼합회 지원직
+    TriadDeception: 삼합회 교란직
+    TriadKilling: 삼합회 살인직
+    NeutralAny: 중립 임의직
+    NeutralBenign: 중립 선
+    NeutralEvil: 중립 악
+    NeutralKilling: 중립 살인직
+phase:
+  IDLE: 대기
+  INITIATING: 게임 초기화
+  NICKNAME_SELECTION: 닉네임 선택
+  FINISHING: 게임 종료
+  MORNING: 아침
+  DISCUSSION: 토론
+  VOTE: 투표
+  ELECTION: 당선
+  DEFENSE: 변론
+  VOTE_EXECUTION: 사형 투표
+  LAST_WORDS: 작별인사
+  POST_EXECUTION: 사형 결과
+  EVENING: 저녁
+  NIGHT: 밤

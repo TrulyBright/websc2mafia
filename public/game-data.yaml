@@ -1,0 +1,993 @@
+# 직업 tooltip을 변경하려면 이 파일의 WitchDoctor를 참고하세요.
+tooltip:
+  Bodyguard:
+    description: 매일 한 명을 경호합니다. 대상이 공격받으면 공격자와 싸워서 같이 죽습니다.
+    notes:
+    - 경호로 사망하면 치료를 받지 못합니다.
+    crimes:
+      MURDER: 경호로 공격자를 죽인 경우.
+    quote: '"殺身成仁"'
+  Citizen:
+    description: 밤에 방탄조끼를 입어 그날밤 공격을 받아도 죽지 않게 될 수 있습니다.
+    notes:
+    - 방탄조끼는 단 1벌만 제공됩니다.
+    - 최후의 2인 중 Citizen이 있으면 Town 세력이 승리합니다.
+    quote: 때로는, 마피아에서는 자주, 한 표로 모든 게 바뀝니다.
+    constraint:
+      RECRUITABLE:
+        short: 영입되면 Mafioso/Enforcer이 됨
+        note:
+          1: Godfather에게 영입되면 Mafioso이, DragonHead에게 영입되면 Enforcer이 됩니다.
+  Coroner:
+    description: 법의학의 대가입니다. 매일 시체를 하나 부검하여 정보를 얻습니다.
+    notesTitle: 부검으로 얻는 정보
+    notes:
+    - 직업
+    - 사인
+    - 망자가 마지막으로 방문한 대상
+    - 망자에게 여태까지 방문한 사람들의 직업
+    quote: 죽은 자도 말이 있습니다.
+  Crier:
+    description: 목청 좋은 사람입니다. 밤에 익명으로 말할 수 있습니다.
+    notes:
+    - Judge의 부패한 재판 때 Judge와 똑같이 발언이 강조됩니다.
+    crimes:
+      DISTURBING_THE_PEACE: 밤에 말한 경우.
+    quote: '"목소리 큰 놈이 이긴다."'
+  Detective:
+    description: 매일 밤 한 명을 미행하여 누구를 방문하는지 알아냅니다.
+    notes:
+    - Detective는 설정과 관계없이 검출 면역을 무시하고 방문 대상을 무조건 알아냅니다.
+    crimes:
+      TRESPASS: 능력을 사용한 경우.
+    quote: '"나는 범인이다...나는 범인이다..."'
+  Doctor:
+    description: 매일 밤 한 명을 치료합니다. 치료된 사람은 그날밤 공격을 받아도 죽지 않고 살아납니다.
+    notes:
+    - 공격을 2번 받은 사람을 살리려면 Doctor 2명이 필요합니다.
+    - 대상은 그날밤 직업이 바뀌지 않도록 보호됩니다.
+    - 개종되면 WitchDoctor가 됩니다.
+    quote: '"나는 환자의 건강과 생명을 첫째로 생각하겠노라."'
+  Escort:
+    description: 비치는 옷으로 악당을 유혹하는 직업입니다. 매일 밤 한 명을 방문하여 그날밤 능력을 사용하지 못하게 합니다.
+    notes:
+    - Escort 자신도 능력을 차단당할 수 있습니다.
+    crimes:
+      SOLICITING: 능력을 차단한 경우.
+      DISTURBING_THE_PEACE: Town 세력의 능력을 차단한 경우.
+    quote: 미인계도 전략입니다.
+    constraint:
+      RECRUITABLE:
+        short: 영입되면 Consort/Liaison이 됨(Town이 약해집니다.)
+        note:
+          1: Godfather에게 영입되면 Consort가, DragonHead에게 영입되면 Liaison이 됩니다.
+  Consort:
+    description: 외모를 조직에 바친 사람입니다. 매일 밤 한 명을 유혹하여 그날밤 능력을 사용하지 못하게 합니다.
+    notes:
+    - Consort 자신은 능력을 차단당하지 않습니다.
+    crimes:
+      SOLICITING: 능력을 차단한 경우.
+      DISTURBING_THE_PEACE: Town 세력의 능력을 차단한 경우.
+    quote: 미인계도 전략입니다.
+  Liaison:
+    description: 외모를 조직에 바친 사람입니다. 매일 밤 한 명을 유혹하여 그날밤 능력을 사용하지 못하게 합니다.
+    notes:
+    - Liaison 자신은 능력을 차단당하지 않습니다.
+    crimes:
+      SOLICITING: 능력을 차단한 경우.
+      DISTURBING_THE_PEACE: Town 세력의 능력을 차단한 경우.
+    quote: 미인계도 전략입니다.
+  Investigator:
+    description: 매일 밤 한 명을 방문하여 신원을 조사합니다.
+    notes:
+    - 검출 면역을 무시하지 못합니다.
+    crimes:
+      TRESPASS: 능력을 사용한 경우.
+    quote: '"털어서 먼지 안 나는 사람 없다."'
+    constraint:
+      DETECT_EXACT_ROLE:
+        short: 조사하면
+        value:
+          CRIME: 목표가 저지른 범죄를 알아냄
+          ROLE: 목표의 정확한 직업을 알아냄
+        note:
+          CRIME: 조사하면 목표가 저지른 범죄를 알아냅니다.
+          ROLE: 조사하면 목표의 정확한 직업을 알아냅니다.
+  Jailor:
+    description: 낮에 한 명을 골라서 밤에 납치합니다. 그날밤 수감자는 Jailor와 대화만 할 수 있습니다. 원한다면 수감자를 감옥에서 즉결처형할 수도 있습니다.
+    notes:
+    - 사형이 있은 날에는 감금할 수 없습니다.
+    - 즉결처형은 총 2번 할 수 있으며, 치료, 경호, 방어 수준을 무시하고 수감자를 무조건 죽입니다.
+    - 수감자는 Jailor의 이름을 알 수 없습니다.
+    - 수감자는 갇힌 날 밤 BASIC 수준 방어가 부여됩니다.
+    - 수감자는 갇힌 날 능력을 차단당해 사용할 수 없게 됩니다.
+    crimes:
+      KIDNAP: 능력을 사용한 경우.
+      MURDER: 수감자를 처형한 경우.
+    quote: '"학생이라는 죄로 교실이라는 감옥에 갇혀..."'
+  Kidnapper:
+    description: 낮에 한 명을 골라서 밤에 납치합니다. 그날밤 수감자는 Kidnapper과 대화만 할 수 있습니다. 원한다면 수감자를 감옥에서 즉결처형할 수도 있습니다.
+    notes:
+    - 사형이 있은 날에는 감금할 수 없습니다.
+    - 즉결처형은 총 2번 할 수 있으며, 치료, 경호, 방어 수준을 무시하고 수감자를 ABSOLUTE 수준으로 무조건 죽입니다.
+    - 수감자는 Kidnapper의 이름을 알 수 없습니다.
+    - 수감자는 갇힌 날 밤 BASIC 수준 방어가 부여됩니다.
+    - 수감자는 갇힌 날 능력을 차단당해 사용할 수 없게 됩니다.
+    - 동료를 가둘 수 있습니다.
+    crimes:
+      KIDNAP: 능력을 사용한 경우.
+      MURDER: 수감자를 처형한 경우.
+    quote: '"학생이라는 죄로 교실이라는 감옥에 갇혀..."'
+  Interrogator:
+    description: 낮에 한 명을 골라서 밤에 납치합니다. 그날밤 수감자는 Interrogator와 대화만 할 수 있습니다. 원한다면 수감자를 감옥에서 즉결처형할 수도 있습니다.
+    notes:
+    - 사형이 있은 날에는 감금할 수 없습니다.
+    - 즉결처형은 총 2번 할 수 있으며, 치료, 경호, 방어 수준을 무시하고 수감자를 ABSOLUTE 수준으로 무조건 죽입니다.
+    - 수감자는 Interrogator의 이름을 알 수 없습니다.
+    - 수감자는 갇힌 날 밤 BASIC 수준 방어가 부여됩니다.
+    - 수감자는 갇힌 날 능력을 차단당해 사용할 수 없게 됩니다.
+    - 동료를 가둘 수 있습니다.
+    crimes:
+      KIDNAP: 능력을 사용한 경우.
+      MURDER: 수감자를 처형한 경우.
+    quote: '"학생이라는 죄로 교실이라는 감옥에 갇혀..."'
+  Lookout:
+    description: 매일 밤 한 명을 방문하여 그날밤 그 사람에게 방문한 사람들을 알아냅니다.
+    notes:
+    - Lookout는 경계 중인 Veteran을 방문해도 죽지 않습니다.
+    - Lookout는 설정과 관계없이 검출 면역을 무시하지 못합니다.
+    - 자택을 감시할 수 있습니다.
+    crimes:
+      TRESPASS: 능력을 사용한 경우.
+    quote: '"범인은 범죄현장에 반드시 다시 나타난다."'
+  Marshall:
+    description: 낮에 즉결재판을 개시할 수 있습니다.
+    notesTitle: 설명
+    notes:
+    - 즉결재판이 열린 날에는 하루에 여러 명을 사형할 수 있습니다. 과반수를 득표한 자는 변론 없이 즉시 총살됩니다.
+    - 특별히 설정하지 않는 한, Mayor이 존재하면 Marshall는 존재할 수 없습니다.
+    - Marshall는 치료를 받을 수 없습니다.
+    constraint:
+      OPPORTUNITY:
+        short: "즉결재판 기회:"
+        value: value회
+        note: 즉결재판은 총 value회 개시할 수 있습니다.
+      QUOTA_PER_LYNCH:
+        short: 일일 최대 사형 수
+        value: value명
+        note: 즉결재판으로 하루에 value명까지 총살할 수 있습니다.
+    crimes:
+      CORRUPTION: 능력을 사용한 경우.
+    quote: '"Death is the solution to all problems. No man - no problem."'
+  Mason:
+    description: 밤에 Freemasonry 소속끼리 대화할 수 있습니다.
+    notes:
+    - Cultist로 개종되지 않습니다. Cult 세력이 접근하면 그 정체를 알아냅니다.
+    - MasonLeader이 죽으면 MasonLeader으로 승격됩니다.
+    - Freemasonry은 Citizen, Cult, Auditor 중 하나가 있어야 출현합니다.
+    crimes:
+      CONSPIRACY: 밤에 대화한 경우.
+    quote: '"우리는 어디에나 있고 어디에도 없다."'
+  MasonLeader:
+    description: 매일 한 명을 방문하여 영입을 시도하고, 대상이 직업 Citizen이라면 Mason으로 영입합니다. 밤에 Freemasonry 소속끼리 대화할 수 있습니다.
+    notes:
+    - 대상이 Cult 세력이라면 영입을 시도하는 대신 죽입니다.
+    - Cultist로 개종되지 않습니다. Cult 세력이 접근하면 그 정체를 알아냅니다.
+    - 대상이 직업 Citizen이 아니라면 영입은 되지 않지만, 대신 그날밤 개종도 영입도 회계도 되지 않도록 보호됩니다.
+    - Freemasonry은 Citizen, Cult, Auditor 중 하나가 있어야 출현합니다.
+    crimes:
+      CONSPIRACY: 밤에 대화한 경우.
+      SOLICITING: 영입을 시도한 경우.
+      TRESPASS: Cult 세력을 죽이려 시도한 경우.
+      MURDER: Cult 세력을 죽인 경우.
+    quote: '"우리는 어디에나 있고 어디에도 없다."'
+  Mayor:
+    description: 낮에 Mayor임을 공개하면서 추가 투표권을 반영구히 얻을 수 있습니다.
+    notes:
+    - 획득하는 투표권은 3표입니다.
+    - 직업이 바뀌면 추가 투표권을 잃습니다.
+    - 특별히 설정하지 않는 한, Marshall가 존재하면 Mayor은 존재할 수 없습니다.
+    - Mayor은 치료를 받을 수 없습니다.
+    crimes:
+      CORRUPTION: 능력을 사용한 경우.
+    quote: '"마을의 주권은 시장에게 있고, 모든 권력은 시장으로부터 나온다."'
+  Sheriff:
+    description: 매일 밤 한 명을 방문하여 사악한 직업인지 조사합니다.
+    notesTitle: 적발 가능한 직업/세력
+    notes:
+    - Mafia
+    - Triad
+    - MassMurderer
+    - Arsonist
+    - Cult
+    quote: 가장 단순하고, 가장 믿음직스럽습니다.
+  Spy:
+    description: Mafia/Triad의 대화를 도청하고, 누구를 죽이러 가는지, 누구를 방문하는지 알아냅니다.
+    notes:
+    - Mafia나 Triad 세력이 있어야만 출현할 수 있습니다.
+    crimes:
+      TRESPASS: 기본으로 보유합니다.
+    quote: '"우리는 음지에서 일하며 양지를 지향한다."'
+    constraint:
+      WIRETAP_JAILED:
+        short: Kidnapper과 Interrogator에게 수감된 사람의 말도 도청
+        note:
+          1: Kidnapper과 Interrogator에게 수감된 사람과의 대화도 도청할 수 있습니다.
+  Veteran:
+    description: 피해망상으로 불명예 제대한 예비역입니다. 밤에 자택에서 경계를 서면 그날밤 방문하는 사람들을 모조리 죽입니다.
+    notes: []
+    crimes:
+      DISTRUCTION_OF_PROPERTY: 경계를 선 경우.
+      MURDER: 경계로 사람을 죽인 경우.
+    quote: '"노병은 죽지 않는다. 다만 사라질 뿐."'
+    constraint:
+      OPPORTUNITY:
+        short: '경계 기회:'
+        value: value회
+        note: 경계는 value회 설 수 있습니다.
+      OFFENSE_LEVEL:
+        short: '공격 수준:'
+        value:
+          BASIC: 기본
+          STRONG: 강력
+        note:
+          BASIC: 경계는 BASIC 수준으로 적을 공격합니다.
+          STRONG: 경계는 STRONG 수준으로 적을 공격합니다.
+  Vigilante:
+    description: 밤에 사람을 하나 죽일 수 있습니다.
+    notes: []
+    crimes:
+      TRESPASS: 살인을 시도한 경우.
+      MURDER: 살인에 성공한 경우.
+    quote: 법의 심판을 기다리지 말고 직접 악을 처단하세요.
+    constraint:
+      OPPORTUNITY:
+        short: 총알을
+        value: value발 보유
+        note: 총알은 value발 보유합니다.
+      TARGET_IS_TOWN:
+        short: Town을 살해하면
+        value:
+          SUICIDE: 자살
+          LOSE_ALL_BULLETS: 총알을 전부 잃음
+        note:
+          SUICIDE: Town을 살해하면 죄책감에 자살합니다.
+          LOSE_ALL_BULLETS: Town을 살해하면 죄책감에 총알을 전부 버립니다.
+  Judge:
+    description: 낮에 부패한 재판을 개정할 수 있습니다. 또 밤에 익명으로 말할 수 있습니다.
+    notesTitle: 설명
+    notes:
+    - 부패한 재판 동안 Judge의 투표는 4표로 계산되며, 과반수를 득표한 자는 변론 없이 즉시 사형됩니다.
+    - 재판을 한번 열면 하루를 쉬어야 또 개정할 수 있습니다.
+    - 부패한 재판 중에는 모든 발언이 익명으로 처리되며, Judge와 Crier의 발언은 강조됩니다.
+    - 밤에 말할 때와 재판 중 발언이 강조될 때, 다른 사람들은 Crier과 Judge를 구분할 수 없습니다.
+    crimes:
+      CORRUPTION: 재판을 개정한 경우.
+      DISTURBING_THE_PEACE: 밤에 말한 경우.
+    quote: '"안 돼. 안 살려줘. 내려줄 생각 없어. 돌아가."'
+    constraint:
+      OPPORTUNITY:
+        short: '개정 기회:'
+        value: value회
+        note: 재판은 총 value회 개정할 수 있습니다.
+  Auditor:
+    description: 목표를 횡령범으로 조작하여 몰락시키는 회계사입니다. 매일 밤 한 명을 방문하여 그 세력의 최하위권으로 만듭니다.
+    notesTitle: 설명
+    notes:
+    - Town 세력은 회계당하면 직업이 Citizen이 됩니다.
+    - Mafia 세력은 회계당하면 직업이 Mafioso이 됩니다.
+    - Triad 세력은 회계당하면 직업이 Enforcer이 됩니다.
+    - Neutral 세력은 회계당하면 직업이 Scumbag가 됩니다.
+    - Cult 세력과 방어 수준이 BASIC 이상인 직업은 회계할 수 없습니다.
+    crimes:
+      CORRUPTION: 회계에 성공한 경우.
+    quote: '"이 세상에 확실한 것은 단 두 가지밖에 없으니 바로 죽음과 세금이다."'
+    constraint:
+      OPPORTUNITY:
+        short: '회계 기회:'
+        value: value회
+        note: 회계는 총 value번 할 수 있습니다.
+  WitchDoctor:
+    description: 매일 밤 한 명을 치료하여 그날밤 대상이 공격받으면 되살립니다. 되살아난 대상은 WitchDoctor를 구세주라 믿고 스스로 Cultist가 됩니다.
+    notes:
+    - Freemasonry, Mafia, Triad는 구원은 가능하나 개종은 할 수 없습니다.
+    - 특히 Freemasonry은 구원하면 이들에게 정체를 들킵니다.
+    - WitchDoctor는 산 자와 죽은 자를 통틀어 게임 내에 단 한 명만 존재할 수 있습니다.
+    crimes:
+      CONSPIRACY: 개종에 성공한 경우.
+    quote: '"(...)나는 부활이요 생명이니 나를 믿는 자는 죽어도 살겠고(...)"'
+    constraint:
+      # 직업 설정은 세 가지 유형이 있습니다.
+      OPPORTUNITY: # 설정 하나가 여러 가지 value가 될 수 있고, value별로 텍스트를 따로 할당하지 않는 유형
+        short: '구원 기회(성공 시에만 소모됨):' # 직업 설정 modal에 보일 텍스트
+        value: value회 # 직업 설정 modal의 <option> 태그에 들어갈 텍스트. value는 나중에 JS가 숫자로 대체합니다.
+        note: 총 value회 구원할 수 있습니다. # 실제 인게임 툴팁에 들어갈 텍스트. value는 나중에 JS가 숫자로 대체합니다.
+      DELAY: # 설정 하나가 여러 가지 value가 될 수 있고, value별로 텍스트를 따로 할당해주는 유형
+        short: 한번 구원하면 # 직업 설정 modal에 보일 텍스트
+        value: # 직업 설정 modal의 <option> 태그에 들어갈 텍스트
+          0: 쉬지 않아도 됨 # <option value="0">에 들어갑니다.
+          1: 하루를 쉬어야 함 # <option value="1">에 들어갑니다.
+          2: 이틀을 쉬어야 함 # <option value="2">에 들어갑니다.
+        note: # 실제 인게임 툴팁에 들어갈 텍스트. JS가 골라서 넣어줍니다.
+          0: 재구원 대기시간은 없습니다.
+          1: 한번 구원에 성공하면 하루를 쉬어야 합니다.
+          2: 한번 구원에 성공하면 이틀을 쉬어야 합니다.
+      DETECTION_IMMUNE: # 켜고 끄는 유형
+        short: 검출 면역 # 직업 설정 modal에 보일 텍스트
+        note: # 인게임 툴팁에 들어갈 텍스트
+          1: WitchDoctor는 검출 면역입니다.
+          # 0: WitchDoctor는 검출 면역이 아닙니다. 이걸 설정하면 꺼졌을 때도 툴팁 설명이 들어갑니다.
+  MassMurderer:
+    description: 전기톱 살인마입니다. 밤에 목표를 선택하면 목표의 '집'을 찾아가 그날밤 그 집에 있는 사람을 다 죽입니다.
+    notes:
+    - 목표를 방문한 사람들을 목표의 '집'에 있다고 합니다. 목표가 다른 사람을 방문하지 않았다면 목표도 자택에 있는 것으로 봅니다.
+    - MassMurderer는 밤에 무적입니다.
+    - MassMurderer의 자택도 방문할 수 있습니다.
+    crimes:
+      TRESPASS: 살인을 시도한 경우.
+      MURDER: 살인에 성공한 경우.
+      DISTRUCTION_OF_PROPERTY: 한번에 2명 이상을 죽인 경우.
+    quote: '"Could you hold the chainsaw a bit closer to your mouth, please?"'
+    constraint:
+      DELAY:
+        short: 한번에 2명 이상을 학살하면
+        value:
+          1: 하루를 쉬어야 함
+          2: 이틀을 쉬어야 함
+        note:
+          1: 한번에 2명 이상을 죽이면 하루를 쉬어야 합니다.
+          2: 한번에 2명 이상을 죽이면 이틀을 쉬어야 합니다.
+      DETECTION_IMMUNE:
+        short: 검출 면역
+        note:
+          1: MassMurderer는 검출면역입니다.
+  Cultist:
+    description: 복음을 전파하는 교인입니다. 매일 밤 한 명을 방문하여 Cultist로 개종합니다.
+    notes:
+    - Freemasonry, Mafia, Triad는 개종할 수 없습니다.
+    - 특히 Freemasonry에게 접근하면 이들에게 정체를 들킵니다.
+    - 살아 있는 Cult 수는 총원에서 Mafia와 Triad의 인원수를 뺀 값의 1/3을 넘을 수 없습니다. Cult가 2명 죽을 때마다 개종
+      기회가 1회 부여됩니다.
+    crimes:
+      SOLICITING: 개종을 시도한 경우.
+      CONSPIRACY: 개종에 성공한 경우.
+    quote: '"네 시작은 미약하나 그 끝은 창대하리라."'
+    constraint:
+      IGNORE_NIGHT_IMMUNE:
+        short: 방어 수준이 BASIC 이상인 사람도 개종
+        note:
+          1: 방어 수준이 BASIC 이상인 사람도 개종합니다.
+      DELAY:
+        short: 한번 개종하면
+        value:
+          0: 쉬지 않아도 됨
+          1: 하루를 쉬어야 함
+          2: 이틀을 쉬어야 함
+        note:
+          0: 재개종 대기시간은 없습니다.
+          1: 한번 개종하면 하루를 쉬어야 합니다.
+          2: 한번 개종하면 이틀을 쉬어야 합니다.
+  Amnesiac:
+    description: 최근에 혼수 상태에서 깨어난 사람입니다. 무덤에서 망자를 하나 선택하여 그 사람의 직업으로 변할 수 있습니다.
+    notes:
+    - Vigilante처럼 기회가 제한된 직업을 기억하면 망자가 쓰고 남은 기회를 그대로 상속받습니다. 기회를 다 소진하고 죽어 잔여 기회가
+      없다면 기회가 단 1회 부여됩니다.
+    - 설정과 관계없이 Godfather, DragonHead, Mayor, Marshall, Crier, Judge, Counsel, MasonLeader,
+      WitchDoctor가 될 수 없습니다.
+    - Escort, Consort, Liaison은 Amnesiac의 기억을 차단할 수 없습니다.
+    quote: 무한한 가능성 저 너머로!
+    constraint:
+      NOTIFIED:
+        short: 기억한 직업이 마을에 밝혀짐
+        note:
+          1: 기억한 직업은 마을에 밝혀집니다.
+      NO_TOWN:
+        short: Town 세력이 될 수 없음
+        note:
+          1: Town 세력이 될 수 없습니다.
+  Executioner:
+    description: 게임 시작 시 목표가 하나 지정됩니다. 목표를 사형하도록 사람들을 선동하세요.
+    notes:
+    - 목표가 밤에 죽으면 Jester가 됩니다.
+    - Executioner는 BASIC 방어를 보유하여 밤에 무적입니다.
+    - 끝까지 살아남아야 승리합니다.
+    quote: 당신은 잘못이 없습니다. 잘못은 선동에 넘어간 사람들이 한 거죠.
+    constraint:
+      TARGET_IS_TOWN:
+        short: 목표는 무조건 Town 세력
+        note:
+          1: 목표는 Town 세력입니다.
+  Arsonist:
+    description: 매일 밤 한 명을 방문하여 기름을 묻힙니다. 불을 지르면 기름 묻은 사람들은 다 불타 죽습니다.
+    notes:
+    - 기름 묻은 사람이 방문하는 사람에게도 불이 번집니다.
+    - Arsonist의 방화는 경호와 방어 수준을 무시하고 대상을 ABSOLUTE 수준으로 죽입니다.
+    - 하루에 기름을 묻히거나 불을 붙이거나 둘 중 하나만 할 수 있습니다.
+    - 능력을 차단한 자에게 자동으로 기름을 묻힙니다.
+    - 밤이 끝날 때마다 자신에게 묻은 기름을 자동으로 지웁니다.
+    crimes:
+      TRESPASS: 방문하여 기름을 묻힌 경우.
+      DISTRUCTION_OF_PROPERTY: 불을 지른 경우.
+      ARSON: 불을 지른 경우.
+      MURDER: 살인에 성공한 경우.
+    quote: '"불 필요하신가요?"'
+    constraint:
+      NOTIFIED:
+        short: 기름에 묻었음을 목표에게 알림
+        note:
+          1: 목표는 기름에 묻었음을 알 수 있습니다.
+  Witch:
+    description: 매일 밤 두 명을 선택하여 한 사람이 다른 사람을 방문하도록 조종합니다.
+    notes:
+    - "'방문'한다는 것은 1) 목표의 집을 찾아가고 2) 방문하여 사용하는 능력이 있다면 그 능력도 사용하는 것을 말합니다."
+    - 개종되면 WitchDoctor가 됩니다.
+    - 자신을 조종할 수 있습니다.
+    quote: "『자경과 마녀와 시장』"
+    constraint:
+      NOTIFIED:
+        short: 조종당함을 목표에게 알림
+        note:
+          1: 목표는 조종당함을 알 수 있습니다.
+  Scumbag:
+    description: Scumbag는 아무런 능력이 없습니다.
+    notes:
+    - Godfather에게 영입되면 Mafioso이, DragonHead에게 영입되면 Enforcer이 됩니다.
+    quote: 세상을 싫어하는 패배자입니다.
+  Jester:
+    description: Jester는 아무 능력도 없습니다. 최대한 의심받아 낮에 사형당하세요.
+    notes: []
+    quote: '"Why so serious?"'
+    constraint:
+      VICTIMS:
+        short: Jester가 사형당하면
+        value:
+          ALL: 투표자 전원이 자살
+          ONE: 투표자 한 명이 자살
+        note:
+          ALL: Jester가 사형당하면 Jester에게 표를 던진 전원이 그날밤 죄책감에 자살합니다.
+          ONE: Jester가 사형당하면 Jester에게 표를 던진 사람 중 하나가 그날밤 죄책감에 자살합니다.
+  Survivor:
+    description: 자기 목숨밖에 관심이 없는 사람입니다. 밤에 방탄조끼를 착용하면 그날밤 BASIC 방어를 얻어 공격을 받아도 죽지 않게 됩니다.
+    notes:
+    - 타고난 눈치로 매일 밤 남은 직업들을 알아냅니다.
+    quote: 16년 간 친척 집에서 눈칫밥만 먹으며 살아남은 당신! 이제는 눈치로 목숨까지 부지하세요!
+    constraint:
+      OPPORTUNITY:
+        short: 방탄조끼를
+        value: value벌 보유
+        note: 방탄조끼는 value벌 보유합니다.
+  SerialKiller:
+    description: 매일 밤 사람을 하나 죽입니다.
+    notes:
+    - SerialKiller는 밤에 무적입니다.
+    - 능력을 차단당하면 차단자를 죽입니다.
+    - SerialKiller는 검출 면역입니다.
+    crimes:
+      TRESPASS: 죽이러 방문한 경우.
+      MURDER: 죽인 경우.
+    quote: '"살인은 감자칩과 같아서, 한번 시작하면 도저히 멈출 수가 없다."'
+  Counsel:
+    description: 게임 시작 시 의뢰인 3명이 지정됩니다. 의뢰인이 아무도 사형당하지 않도록 하세요. 매일 밤 의뢰인 하나를 고르면 정확한 직업을 알아내고 그날밤 검출 면역을 부여합니다.
+    notes:
+    - 이 직업은 직업 공모전 우승자 마시멜로군님이 만들었습니다.
+    crimes:
+      TRESPASS: 능력을 사용한 경우.
+    quote: '"변호사는 우애와 신의를 존중하며, 상부상조ㆍ협동정신을 발휘한다."'
+    constraint:
+      DEFENSE_LEVEL:
+        short: '방어 수준:'
+        value:
+          NONE: 없음
+          BASIC: 기본
+        note:
+          NONE: 이 설정에서 Counsel는 방어 수준이 없습니다.
+          BASIC: Counsel는 BASIC 수준 방어를 보유합니다.
+      IF_FAIL:
+        short: 의뢰인이 하나라도 사형당하면
+        value:
+          SUICIDE: 자살
+          BE_SCUMBAG: 인간쓰레기가 됨
+        note:
+          SUICIDE: 의뢰인이 하나라도 사형당하면 자살합니다.
+          BE_SCUMBAG: 의뢰인이 하나라도 사형당하면 Scumbag가 됩니다.
+  Beguiler:
+    description: 밤에 목표를 지정하여 그 뒤에 숨습니다. 그날밤 Beguiler를 방문하는 자는 대신 목표에게 가게 됩니다.
+    notes:
+    - 동료 Mafia 뒤에도 숨을 수 있습니다.
+    crimes:
+      TRESPASS: 능력을 사용한 경우.
+      MURDER: 능력으로 살인을 유도한 경우.
+    quote: 약취유인죄로 몇 번 감옥에 갔다 왔습니다.
+    constraint:
+      OPPORTUNITY:
+        short: '숨을 기회:'
+        value: value회
+        note: 총 value번 숨을 수 있습니다.
+      NOTIFIED:
+        short: 잠입당했음을 목표에게 알림
+        note:
+          1: 목표는 뒤에 누가 숨었음을 알 수 있습니다.
+  Deceiver:
+    description: 밤에 목표를 지정하여 그 뒤에 숨습니다. 그날밤 Deceiver을 방문하는 자는 대신 목표에게 가게 됩니다.
+    notes:
+    - 동료 Triad 뒤에도 숨을 수 있습니다.
+    crimes:
+      TRESPASS: 능력을 사용한 경우.
+      MURDER: 능력으로 살인을 유도한 경우.
+    quote: 약취유인죄로 몇 번 감옥에 갔다 왔습니다.
+    constraint:
+      OPPORTUNITY:
+        short: '숨을 기회:'
+        value: value회
+        note: 총 value번 숨을 수 있습니다.
+      NOTIFIED:
+        short: 잠입당했음을 목표에게 알림
+        note:
+          1: 목표는 뒤에 누가 숨었음을 알 수 있습니다.
+  Agent:
+    description: 밤에 목표를 지정하여 그날밤 목표가 방문한 사람과 목표에게 방문한 사람들을 알아냅니다.
+    notes:
+    - 자택을 감시할 수 있습니다.
+    crimes:
+      TRESPASS: 능력을 사용한 경우.
+    quote: 최전방 정찰요원입니다.
+    constraint:
+      DELAY:
+        short: 한번 조사하면 하루를 쉬어야 함
+        note:
+          1: 한번 조사하면 하루를 쉬어야 합니다.
+  Vanguard:
+    description: 밤에 목표를 지정하여 그날밤 목표가 방문한 사람과 목표에게 방문한 사람들을 알아냅니다.
+    notes:
+    - 자택을 감시할 수 있습니다.
+    crimes:
+      TRESPASS: 능력을 사용한 경우.
+    quote: 최전방 정찰요원입니다.
+    constraint:
+      DELAY:
+        short: 한번 조사하면 하루를 쉬어야 함
+        note:
+          1: 한번 조사하면 하루를 쉬어야 합니다.
+  Blackmailer:
+    description: 매일 밤 한 명을 협박하여 다음 날 아무 말도 하지 못하고 투표도 못하게 합니다.
+    notes:
+    - 협박은 낮뿐만 아니라 밤까지 적용됩니다.
+    quote: '"침묵은 금이다."'
+  Silencer:
+    description: 매일 밤 한 명을 협박하여 다음 날 아무 말도 하지 못하고 투표도 못하게 합니다.
+    notes:
+    - 협박은 낮뿐만 아니라 밤까지 적용됩니다.
+    quote: '"침묵은 금이다."'
+  Janitor:
+    description: 매일 밤 목표를 하나 지정하여 그날밤 목표가 죽으면 시체를 훼손, 다음날 사인과 직업과 유언이 공개되지 않도록 막습니다.
+    notes:
+    - 훼손 성공 시 Janitor은 시체의 사인과 유언을 습득합니다. 직업은 Janitor도 알 수 없습니다.
+    crimes:
+      TRESPASS: 시체 훼손을 시도한 경우.
+    quote: 전문적이고, 과학적이고, 집요한 부관참시.
+    constraint:
+      OPPORTUNITY:
+        short: '훼손 기회:'
+        value: value회
+        note: 시체는 총 value구를 훼손할 수 있습니다.
+  IncenseMaster:
+    description: 매일 밤 목표를 하나 지정하여 그날밤 목표가 죽으면 시체를 훼손, 다음날 직업과 유언이 공개되지 않도록 막습니다.
+    notes:
+    - 훼손 성공 시 IncenseMaster는 시체의 사인과 유언을 습득합니다. 직업은 IncenseMaster도 알 수 없습니다.
+    crimes:
+      TRESPASS: 시체 훼손을 시도한 경우.
+    quote: 전문적이고, 과학적이고, 집요한 부관참시.
+    constraint:
+      OPPORTUNITY:
+        short: '훼손 기회:'
+        value: value회
+        note: 시체는 총 value구를 훼손할 수 있습니다.
+  Framer:
+    description: 매일 밤 한 명을 방문하여 사악하게 보이도록 조작합니다.
+    notesTitle: 설명
+    notes:
+    - 대상은 무작위 범죄 하나가 영구히 추가됩니다.
+    - 대상은 그날밤 무작위 사악한 직업으로 조사됩니다.
+    - 대상은 그날밤 게임 내 사악한 직업이 방문한 사람을 방문한 것으로 조사됩니다.
+    - Framer는 설정과 관계없이 검출 면역입니다.
+    crimes:
+      TRESPASS: 능력을 사용한 경우.
+    quote: 누명을 씌우는 재주가 있습니다.
+  Forger:
+    description: 매일 밤 한 명을 방문하여 사악하게 보이도록 조작합니다.
+    notesTitle: 설명
+    notes:
+    - 대상은 무작위 범죄 하나가 영구히 추가됩니다.
+    - 대상은 그날밤 무작위 사악한 직업으로 조사됩니다.
+    - 대상은 그날밤 게임 내 사악한 직업이 방문한 사람을 방문한 것으로 조사됩니다.
+    - Forger은 설정과 관계없이 검출 면역입니다.
+    crimes:
+      TRESPASS: 능력을 사용한 경우.
+    quote: 누명을 씌우는 재주가 있습니다.
+  Consigliere:
+    description: 매일 밤 한 명을 방문하여 신원을 조사합니다.
+    notes:
+    - 검출 면역을 무시합니다.
+    crimes:
+      TRESPASS: 능력을 사용한 경우.
+    quote: 대부의 충직한 오른팔입니다.
+    constraint:
+      PROMOTED:
+        short: Godfather 궐위 시 차기 Godfather가 됨
+        note:
+          1: Godfather가 죽으면 Consigliere가 차기 Godfather가 됩니다.
+      DETECT_EXACT_ROLE:
+        short: 조사하면
+        value:
+          CRIME: 목표가 저지른 범죄를 알아냄(마피아가 매우 약해집니다.)
+          ROLE: 목표의 정확한 직업을 알아냄
+        note:
+          CRIME: 조사하면 목표가 저지른 범죄를 알아냅니다.
+          ROLE: 조사하면 목표의 정확한 직업을 알아냅니다.
+  Administrator:
+    description: 매일 밤 한 명을 방문하여 신원을 조사합니다.
+    notes:
+    - 검출 면역을 무시합니다.
+    crimes:
+      TRESPASS: 능력을 사용한 경우.
+    quote: 용두의 충직한 오른팔입니다.
+    constraint:
+      PROMOTED:
+        short: DragonHead 궐위 시 차기 DragonHead가 됨
+        note:
+          1: DragonHead가 죽으면 Administrator이 차기 DragonHead가 됩니다.
+      DETECT_EXACT_ROLE:
+        short: 조사하면
+        value:
+          CRIME: 목표가 저지른 범죄를 알아냄(삼합회가 매우 약해집니다.)
+          ROLE: 목표의 정확한 직업을 알아냄
+        note:
+          CRIME: 조사하면 목표가 저지른 범죄를 알아냅니다.
+          ROLE: 조사하면 목표의 정확한 직업을 알아냅니다.
+  Godfather:
+    description: 매일 밤 Mafioso에게 살인을 지시합니다. Mafioso이 없다면 Godfather가 직접 죽이러 갑니다.
+    notes:
+    - Godfather는 검출 면역입니다.
+    - 살인과 별개로 영입도 할 수 있습니다. 대상이 영입가능하면 동료가 됩니다.
+    - Godfather와 Mafioso의 살인 목표가 갈린다면 Godfather의 지시를 따릅니다.
+    crimes:
+      TRESPASS: 직접 죽이러 방문한 경우.
+      MURDER: 직접 죽인 경우.
+    quote: "\"I'm gonna make him an offer he can't refuse.\""
+  DragonHead:
+    description: 매일 밤 Enforcer에게 살인을 지시합니다. Enforcer이 없다면 직접 죽이러 갑니다.
+    notes:
+    - DragonHead는 검출 면역입니다.
+    - 살인과 별개로 영입도 할 수 있습니다. 대상이 영입가능하면 동료가 됩니다.
+    - DragonHead와 Enforcer의 살인 목표가 갈린다면 DragonHead의 지시를 따릅니다.
+    crimes:
+      TRESPASS: 직접 죽이러 방문한 경우.
+      MURDER: 직접 죽인 경우.
+    quote: '"大哥"'
+  Mafioso:
+    description: 매일 밤 한 명을 방문하여 죽입니다.
+    notes:
+    - Godfather가 있다면 Godfather의 지시를 따릅니다.
+    crimes:
+      TRESPASS: 직접 죽이러 방문한 경우.
+      MURDER: 죽인 경우.
+    quote: 온갖 궃은 일은 다 떠맡는 말단 조직원입니다.
+  Enforcer:
+    description: 매일 밤 한 명을 방문하여 죽입니다.
+    notes:
+    - DragonHead가 있다면 DragonHead의 지시를 따릅니다.
+    crimes:
+      TRESPASS: 직접 죽이러 방문한 경우.
+      MURDER: 죽인 경우.
+    quote: 온갖 궃은 일은 다 떠맡는 말단 조직원입니다.
+notes-additional:
+  Mafia:
+  - Godfather가 잠수 중이면 조직원 투표로 살인 목표를 정할 수 있습니다.
+  Triad:
+  - DragonHead가 잠수 중이면 조직원 투표로 살인 목표를 정할 수 있습니다.
+goal:
+  Town: 악한 세력 전원을 죽이십시오.
+  Mason: 악한 세력 전원을 죽이십시오.
+  Spy: 악한 세력 전원을 죽이십시오.
+  Mafia: Town 전원을 죽이고 Mafia에 반하는 세력을 다 제거하십시오.
+  Triad: Town 전원을 죽이고 Triad에 반하는 세력을 다 제거하십시오.
+  Counsel: 의뢰인 전원의 사형을 막고 게임 끝까지 생존하세요. 의뢰인이 밤에 죽으면, 어쩔 수 없죠. 그건 Counsel가 할 일이 아니니까요.
+  Survivor: 끝까지 살아남으십시오. 다른 건 당신 알 바가 아닙니다.
+  Amnesiac: 끝까지 살아남으십시오. 단, 다른 직업을 기억했다면 그 직업의 승리 조건을 따릅니다.
+  Jester: 낮에 사형당하십시오.
+  Executioner: 목표가 사형당하는 것을 목격하고 끝까지 살아남으십시오.
+  Cultist: 마을에 Cult를 믿지 않는 자가 없도록 하십시오. 믿지 못하는 자는 다 죽이십시오.
+  WitchDoctor: 마을에 Cult를 믿지 않는 자가 없도록 하십시오. 믿지 못하는 자는 다 죽이십시오.
+  SerialKiller: 마지막으로 살아남은 사람이 되십시오.
+  MassMurderer: 마지막으로 살아남은 사람이 되십시오.
+  Arsonist: 마지막으로 살아남은 사람이 되십시오.
+  Auditor: 끝까지 살아남아 Town 세력의 패배를 목격하십시오.
+  Judge: 끝까지 살아남아 Town 세력의 패배를 목격하십시오.
+  Scumbag: 끝까지 살아남아 Town 세력의 패배를 목격하십시오.
+  Witch: 끝까지 살아남아 Town 세력의 패배를 목격하십시오.
+sound:
+  Jailor: 당신은 감옥에서 처형을 집행하는 라이플 소리를 들었습니다...
+  Veteran: 당신은 이 조용한 마을에서 누군가 싸우는 소리를 들었습니다...
+  Bodyguard: 당신은 격렬한 총격전의 소리를 들었습니다...
+  Vigilante: 당신은 마을을 완전히 뒤흔드는 총성을 들었습니다...
+  MasonLeader: 당신은 두개골이 부서지는 역겨운 소리를 들었습니다...
+  BusDriver: 당신은 누군가 차에 치이는 소리를 들었습니다...
+  Mafioso: 당신은 거리에 총성이 울리는 것을 들었습니다...
+  SerialKiller: 당신은 살인사건의 비명소리를 들었습니다...
+  MassMurderer:
+    1: 당신은 소름 끼치는 비명이 뒤섞인 소리를 들었습니다...
+    else: 당신은 체인톱이 살을 갈아버리는 끔찍한 불협화음을 들었습니다...
+  Arsonist: 당신은 불이 타오르는 소리와 함께 운명을 저주하는 비명소리를 들었습니다...
+  Beguiler: 당신은 둔탁한 소리와 짧은 몸부림, 힘겨운 기침 소리를 들었습니다...
+  Disguiser: 당신은 둔탁한 '쿵' 소리와 함께 미세한 총소리를 간신히 들을 수 있었습니다...
+  SUICIDE: 당신은 밤에 총성 한 발을 들었습니다...
+  Witch: 소름끼치는 웃음소리가 들립니다...
+corpse-found:
+- 님이 싸늘한 주검으로 발견되었습니다.
+- 님이 숨진 채 발견되었습니다.
+- 님의 시체가 발견되었습니다.
+- 님이 사망했습니다.
+cause:
+  Democracy:
+  - 그는 다수결로 죽었습니다.
+  - 그는 인민재판에 희생됐습니다.
+  - 그는 인민재판을 당했습니다.
+  - 그는 재판으로 죽었습니다.
+  - 그는 재판으로 사형됐습니다.
+  - 그는 "민주주의"당했습니다.
+  - 그는 유죄 평결을 받고 사형됐습니다.
+  - 그는 배심원들에게 인민재판을 당했습니다.
+  Bodyguard:
+  - 그는 Bodyguard과의 총격전으로 사망했습니다.
+  - 그는 Bodyguard과 결투하여 사망했습니다.
+  MasonLeader:
+  - 그는 MasonLeader에게 죽도록 맞았습니다.
+  - 그는 MasonLeader에게 단단한 둔기로 죽도록 맞았습니다.
+  - 그는 이단으로서 MasonLeader에게 척결되었습니다.
+  BusDriver:
+  - 그는 BusDriver의 버스에 치여 숨졌습니다.
+  - 그는 BusDriver의 버스에 깔려 납작해졌습니다.
+  - 그는 BusDriver의 버스에 깔려 아스팔트와 하나가 되었습니다.
+  Witch:
+  - 그는 Witch에게 저항했으나 끝내 자살당하고 말았습니다.
+  - 그는 Witch에게 조종당해 총구를 관자놀이에 놓고 방아쇠를 당겼습니다.
+  - 그는 Witch에게 조종당해 스스로 쐈습니다.
+  cursed:
+  - 그는 Witch의 저주에 걸려 죽었습니다.
+  Beguiler:
+  - 그는 Criminal에게 질식당해 죽었습니다.
+  - 그는 Criminal에게 속아 스스로 목을 졸랐습니다.
+  Mafioso:
+  - 그는 Criminal에게 암살당했습니다.
+  - 그는 Criminal에게 살해당했습니다.
+  - 그는 Criminal에게 피살당했습니다.
+  Vigilante:
+  - 그는 Vigilante의 총에 쏘여 살해당했습니다.
+  - 그는 Vigilante의 총에 쏘여 죽었습니다.
+  - 그는 Vigilante에게 정의를 구현당했습니다.
+  Veteran:
+  - 그는 Veteran의 돌격소총에 벌집이 되었습니다.
+  - 그는 경계 중인 Veteran을 건드린 죄로 죽었습니다.
+  MassMurderer:
+  - 그는 MassMurderer에게 내장을 적출당했습니다.
+  - 그는 MassMurderer에게 선혈로 뒤덮인 덩어리가 되어 알아볼 수 없을 정도로 갈려버렸습니다.
+  - 그는 MassMurderer에게 전기톱으로 발기발기 찢어졌습니다.
+  - 그는 MassMurderer의 전기톱에 찢어발겨졌습니다.
+  - 그는 MassMurderer의 전기톱으로 산산히 조각났습니다.
+  SerialKiller:
+  - 그는 SerialKiller에게 난도질이 되었습니다.
+  - SerialKiller가 그의 목을 깔끔하게 잘랐습니다.
+  - SerialKiller가 그의 몸 구석구석에 깊은 자상을 남겼습니다.
+  Arsonist:
+  - 그는 Arsonist에게 소각되었습니다.
+  - 그는 Arsonist에게 재가 되었습니다.
+  - 그는 Arsonist에게 화형되었습니다.
+  Jester:
+  - 그는 Jester를 사형시킨 죄책감에 자살했습니다.
+  - 그는 자기 손으로 순진한 Jester를 사형시키고 말았다는 죄책감에 그만 스스로 삶을 마감했습니다.
+  FEELING_GUILTY_VIGILANTE:
+  - 그는 Town을 죽였다는 죄책감에 그만 자살했습니다.
+  - 그는 제 손으로 무고한 Town을 죽였다는 죄책감을 이기지 못하고 그만 자살했습니다.
+  FEELING_GUILTY_COUNSEL:
+  - 그는 의뢰인을 지키지 못했다는 죄책감에 자살했습니다.
+  - 그는 패소를 견디지 못하고 그만 자살했습니다.
+  Jailor:
+  - 그는 감옥에서 처형당했습니다.
+  - 그는 감옥에서 즉결처형을 당했습니다.
+  DUTY:
+  - 그는 의뢰인을 지키다가 죽었습니다.
+  - 그는 의뢰인을 지키고 장렬히 전사했습니다.
+  - 그는 경호 임무를 완수하고 죽었습니다.
+  SUICIDE:
+  - 그는 자살했습니다.
+  - 그는 명백히 자의로 자살했습니다.
+  leave:
+  - 그는 이 세상을 등졌습니다.
+  - 그는 삶을 포기했습니다.
+  afk:
+  - 그는 명백히 심장마비로 사망했습니다.
+tip:
+- 죽을 때까지 거짓말만 하는 것, 그것이 악직의 모범입니다.
+- 쉽게 포기하지 마세요! 마피아에는 역전할 변수가 어마어마하게 많습니다.
+- Veteran에게 방문한 자가 Bodyguard에게 경호를 받고 있다면, 방문자 대신 Bodyguard이 Veteran과 싸우고 죽습니다.
+- Bodyguard에게 경호되는 사람들이 싸우면 Bodyguard끼리 대신 싸웁니다.
+- Bodyguard C에게 경호되는 Bodyguard B에게 경호되는 A가 공격을 받으면 먼저 B가 나서고, B를 지키러 C가 나섭니다. 더 이상 나설 경호원이 없을 때까지 계속됩니다.
+- Marshall의 즉결재판과 Judge의 부패한 재판은 같이 발동될 수 있습니다.
+- Auditor가 스스로 회계하면 Stump가 됩니다. Stump는 Town 세력이며 BASIC 방어를 보유하지만 아무런 능력이 없고, 투표권도 없습니다.
+- 정확한 직업을 알아내는 직업이 검출 면역인 직업을 조사하면 직업이 'Citizen'으로 보입니다.
+- 검출 면역 무시로 조작자의 조작까지 무시할 수는 없습니다.
+- 능력은 방탄복 착용, 조종, 차단, 잠입, 조작, 살인, 시체 훼손, 조사, 직업 변환, 침묵 순으로 발동됩니다.
+- 일단 살인을 하기로 하면, 살인직이 밤중에 죽더라도 살인이 일어납니다.
+- 다중 계정으로 접속하면 예외 없이 영구정지됩니다. 다중 접속으로 당한 영구정지는 해제되지 않습니다.
+- 해킹을 시도하면 영구히 정지되고 관용 없이 고발됩니다.
+- 누구나 잘못된 판단을 합니다. 그러니 욕설은 하지 마세요. 잦은 욕설은 제재 대상입니다.
+- 마피아는 혼자 할 수 있는 건 적은데 억울하게 당하기는 쉬운 게임입니다. 그러니 화가 나도 추스르세요. 일상이니까요.
+last-night:
+  one: 간밤에 한 명이 우리 곁을 떠났습니다.
+  some: 어젯밤 우리 중 일부가 죽었습니다.
+  many: 지난 밤 상당수가 죽었습니다.
+  toomany: 아주 많은 사람들이 죽었습니다.
+  most: 어젯밤 마을 전체가 말소되었습니다.
+  all: 우리는 전멸했습니다.
+achievements:
+  경호무한육면각체:
+    condition: Bodyguard에게 경호되는 Bodyguard에게 경호되는 자가 Bodyguard에게 경호되는 Bodyguard에게 경호되는 자를 살해하려 시도하여 살인직을 경호하는 Bodyguard을 경호하는 Bodyguard이 피해자를 경호하는 Bodyguard을 경호하는 Bodyguard과 싸우는 것을 목격하기
+    quote: '"경호의중의경호의중의경호의중의경호."'
+  역전재판:
+    condition: Marshall와 Judge의 능력이 같이 발동되는 것을 목격하기
+    quote: '"이의 있소!"'
+  Identity Crisis:
+    condition: 직업이 세 번 바뀌기
+    quote: 내 속엔/내가/너무도 많아
+  Hammer and Sickle:
+    condition: 남은 직업이 Citizen밖에 없는 상태로 승리하기
+    quote: 색깔은 다행히 초록색입니다.
+  Cosmopolitan:
+    condition: 세 가지 다른 세력에 한 번씩 소속되기
+    quote: 세계화 시대에 걸맞은 박쥐가 따로 없습니다.
+  Burn the Evidence:
+    condition: Arsonist으로 시체를 불태우기
+    quote: 대한민국 형법에서 자기 사건의 증거를 인멸하는 것은 합법입니다.
+  Grand Master:
+    condition: Mayor으로 MasonLeader을 겸직하기
+    quote: '"절대 권력은 절대 승리한다."'
+  Epic Fail:
+    condition: 누구도 승리하지 못하는 것을 목격하기
+    quote: '"전쟁에선 모두가 패자야."'
+  Happily ever After:
+    condition: Town 세력을 단 한 명도 잃지 않고 Town 세력으로 승리하기
+    quote: '"(...)그리하여 모두모두 행복하게 살았답니다."'
+  Incognito:
+    condition: Mayor임을 들키지 않고 승리하기
+    quote: ''
+  A for effort:
+    condition: 살인직으로 밤 무적인 자를 4번 공격하기
+    quote: 구하라/그러면 받을 것이다/찾아라/그러면 찾을 것이다/찔러라/언젠가는 죽을 것이다
+  Marathon:
+    condition: 15일째까지 게임을 진행하기
+    quote: 과거에는 30일이었습니다.
+  Zombie Suicide:
+    condition: 낮에 죽고 밤에 자살하기
+  Mission Failed:
+    condition: Mafia/Triad로 동료를 살해하기
+    quote: 세상에 믿을 놈 하나 없습니다.
+  Corleone:
+    condition: Consigliere로 차기 Godfather를 승계하기
+    quote: '"Revenge is a dish best served cold."'
+  Hoist by His Own Molotov:
+    condition: 제 불에 죽기
+    quote: ''
+  Yo Dawg:
+    condition: Amnesiac로 Amnesiac를 기억하기
+    quote: ''
+  Disco Inferno:
+    condition: 하룻밤에 5명 이상을 불태우기
+    quote: '『불타오르네』'
+  Last of Kin:
+    condition: 자기 세력의 마지막 생존자로서 승리하기
+    quote: 다들 당신만을 보고 있습니다.
+  Suicide Hotline:
+    condition: 마을 사람 과반수가 자살한 게임에서 승리하기
+    quote: ''
+  Divine Guidance:
+    condition: 신자를 아무도 잃지 않고 Cult로 승리하기
+  State Religion:
+    condition: Mayor을 Cult로 개종하기
+  Flawless Victory:
+    condition: 동료를 아무도 잃지 않고 Mafia/Triad로 승리하기
+  Jailbreak:
+    condition: SerialKiller로 교도관을 살해하기
+  Hung Jury:
+    condition: 재판대에 올라 찬성 7표, 반대 7표를 득표하기
+  Deader than Dead:
+    condition: 하룻밤에 4회 이상 피격되어 사망하기
+  Mr.Popular:
+    condition: 하룻밤에 9명 이상에게 방문되기
+  You're Winner!:
+    condition: 한 판에 두 번 승리하기
+  Medical Malpractice:
+    condition: 살아 있는 자를 부검하기
+  Coward's Clutch:
+    condition: 살인직을 교살하기
+  The Joker:
+    condition: Jester로 최후의 생존자가 되기
+  Back to Nature:
+    condition: Amnesiac로 Stump를 기억하기
+  Justice:
+    condition: Stump로 전직하기
+  사이코패스:
+    condition: 죄책감을 느끼지만 자살은 하지 않기
+  무너진 의지:
+    condition: Freemasonry이었다가 Cult로 전향하기
+  민주주의:
+    condition: Marshall로 즉결재판을 열지 않고 승리하기
+  재활용:
+    condition: Scumbag였다가 취직하기
+  비선실세:
+    condition: Mayor에서 Mafia/Triad가 되어 승리하기
+  완전범죄:
+    condition: 동료 시체를 훼손하기
+  심리치료:
+    condition: Vigilante으로 총알을 다 잃었다가 다시 살인을 범하기
+  콜드 게임:
+    condition: 무덤에 Town 세력만 있는 상태로 게임을 끝내기
+  은밀하게 위대하게:
+    condition: Mayor으로 변장하기
+  추락하는 별:
+    condition: Marshall로 즉결재판 중 사형당하기
+  Viva la Vida:
+    condition: Mayor이나 Marshall로 시민세력이 과반수인 상태에서 사형당하기
+  Paradox of dogs:
+    condition: Executioner로 목표와 함께 승리하기
+  Final Argument:
+    condition: Counsel로 승리하기
+  Judge of Dread:
+    condition: Judge로 단독 승리하기
+  Eternal Revenue Service:
+    condition: Auditor로 단독 승리하기
+  Just like 'Nam:
+    condition: Veteran으로 한 판에 9명 이상을 살해하기
+  Handi-Capable:
+    condition: Amnesiac로 단독 승리하기
+  Ace Prosecutor:
+    condition: Executioner로 단독 승리하기
+  Forever Alone:
+    condition: Witch로 단독 승리하기
+  The Last Laugh:
+    condition: Jester로 단독 승리하기
+  Sole Survivor:
+    condition: Survivor로 단독 승리하기
+  The Inquisition:
+    condition: MasonLeader으로 Cult를 3명 이상 살해하거나, 한 번이라도 개종에 성공한 Cult를 전원 살해하기
+  All-Seeing Eye:
+    condition: Coroner으로 하룻밤에 아주 많은 정보를 습득하기
+  삶의 끝자락에서:
+    condition: Scumbag로 최후의 생존자가 되기
+  공격이 최선의 방어:
+    condition: Bodyguard으로 스스로 경호하여 죽기
+  All Roles:
+    condition: 전 직업으로 한 번씩 승리하기
+  All Town:
+    condition: 각 Town 직업으로 한 번씩 승리하기
+  All Mafia:
+    condition: 각 Mafia 직업으로 한 번씩 승리하기
+  All Triad:
+    condition: 각 Triad 직업으로 한 번씩 승리하기
+  All Neutral:
+    condition: 각 Neutral 직업으로 한 번씩 승리하기
+  네 시작은 미약하나 그 끝은 창대하리라:
+    condition: 유일한 Cult로 시작하여 승리하기
+  The Final Solution to the Mafia Question:
+    condition: Arsonist으로 남은 플레이어 전원을 전멸시키기
+  Gloomy Sunday:
+    condition: 남은 플레이어 전원을 하룻밤에 자살시키기
+  Licensed to Kill:
+    condition: 운전면허로 사람을 죽이기
+  제보자:
+    condition: 버그를 제보하기
+  기여자:
+    condition: 게임 개발에 기여하기
+  창안자:
+    condition: 신직업을 만들기
+  달인:
+    condition: 인게임에서 완료 가능한 도전과제를 전부 완료하기

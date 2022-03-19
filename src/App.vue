@@ -1,14 +1,45 @@
 <script setup>
 import HelloWorld from './components/HelloWorld.vue'
 import TheWelcome from './components/TheWelcome.vue'
+import Room from './components/Room.vue';
+</script>
+<script>
+export default {
+  name: 'App',
+  data() {
+    return {connection: null}
+  },
+  methods: {
+    sendMessage: function(message) {
+      this.connection.send(message);
+    }
+  },
+  created: function() {
+    console.log("Connection To WebSocket Server");
+    this.connection = new WebSocket("ws://localhost:8000/game");
+    this.connection.onmessage = function(event) {
+      console.log(event);
+    }
+    this.connection.onopen = function(event) {
+      console.log(event);
+    }
+    this.connection.onclose = function(event) {
+      console.log(event);
+    }
+    this.connection.onerror = function(event) {
+      console.log(event);
+    }
+  }
+}
 </script>
 
 <template>
   <header>
-    <img alt="Vue logo" class="logo" src="./assets/logo.svg" width="125" height="125" />
+    <img alt="Vue logo" class="logo" src="./assets/fedora.png" width="125" height="125" />
 
     <div class="wrapper">
-      <HelloWorld msg="You did it!" />
+      <HelloWorld msg="웹SC2마피아 3.0" />
+      <Room></Room>
     </div>
   </header>
 
