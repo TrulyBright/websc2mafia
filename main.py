@@ -8,10 +8,8 @@ from starlette.requests import Request
 from starlette.authentication import AuthenticationBackend, AuthenticationError, SimpleUser, UnauthenticatedUser, AuthCredentials
 from starlette.middleware import Middleware
 from starlette.middleware.authentication import AuthenticationMiddleware
-from starlette.routing import Route, Mount, WebSocketRoute
-from starlette.staticfiles import StaticFiles
-import views
-import ws
+from starlette.routing import WebSocketRoute
+import game
 from log import logger
 
 class BasicAuthBackend(AuthenticationBackend):
@@ -30,21 +28,16 @@ class BasicAuthBackend(AuthenticationBackend):
 conf = Config(".env")
 DEBUG = conf("DEBUG", cast=bool, default=False)
 logger.setLevel(logging.INFO)
+server = game.GameServer()
 routes = [
-    Route("/", views.index),
-    Route("/game", views.game),
-    Route("/about", views.about),
-    Route("/archive", views.archive),
-    Route("/patch-note", views.patch_note),
-    Route("/admin", views.admin),
-    WebSocketRoute("/game", ws.game_endpoint),
-    WebSocketRoute("/admin", ws.admin_endpoint),
-    Mount("/", StaticFiles(directory="dist")),
+    WebSocketRoute("/game", server.endpoint),
+    # WebSocketRoute("/admin", ws.admin_endpoint),
 ]
 middleware = [
     Middleware(AuthenticationMiddleware, backend=BasicAuthBackend())
 ]
 
 app = Starlette(debug=DEBUG, routes=routes, middleware=middleware)
+app.gameserver = server
 
 random.seed()

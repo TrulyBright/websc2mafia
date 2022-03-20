@@ -4,7 +4,7 @@ import random
 import inspect
 from enum import Enum, IntEnum, auto, unique
 from typing import Optional, Union, Type
-from game import ContentKey, Event, EventType, PhaseType, Player, CrimeType, jsonablify
+import game
 
 def role_order_key(class_):
     if issubclass(class_, Mafia):
@@ -164,13 +164,13 @@ class Role:
             }
         """
 
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         """`me`에게 배정되는 직업을 `constraints`를 반영하여 생성합니다.
         
         Attributes:
             `offense_level`: 공격 수준.
             `defense_level`: 방어 수준.
-            `me`: 이 `Role`의 주인인 `Player`.
+            `me`: 이 `Role`의 주인인 `game.Player`.
             `constraints`: 이 `Role`에 적용되는 설정.
             `name`: 직업 영문명. CamelCase입니다.
             `blockable`: 능력을 차단당할 수 있는지 여부.
@@ -199,13 +199,13 @@ class Role:
         self.convertable = True
         self.votes = 1
         self.rest_till = 0
-        self.goal_target: set[Player] = set()
+        self.goal_target: set[game.Player] = set()
         self.can_target_self = False
 
     def __repr__(self):
         return f"<{self.name}>"
 
-    def visit(self, day: int, target: Player):
+    def visit(self, day: int, target: game.Player):
         """`target`을 방문합니다. `target`이 누구 뒤에 숨었다면 앞에 있는 사람을 방문합니다.
         
         Returns:
@@ -228,7 +228,7 @@ class Role:
         일부 특수한 직업은 `action_when_inactive`에 조건이 있습니다.
         가령 연쇄살인마는 능력을 차단당하는 경우에만 `action_when_inactive`가 발동합니다."""
     
-    def respond_to_block(self, blocker: Player):
+    def respond_to_block(self, blocker: game.Player):
         """능력 차단에 대응하는 함수입니다."""
     
     def belongs_to(self, alignment_or_team: Type[Union[Role, Slot]]):
@@ -392,7 +392,7 @@ class Visiting(Role):
     pass
 
 class ActiveOnly(Role):
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self.can_at_the_same_time = False
 
@@ -401,16 +401,16 @@ class ActiveOnly(Role):
 
 class ActiveAndVisiting(Visiting):
     """방문도 하고 방문하지 않고 능력 사용도 하는 직업."""
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self.can_at_the_same_time = False
 
 class KillingVisiting(Visiting, Killing):
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self.offense_level = Level.BASIC
 
-    def visit(self, day: int, target: Player):
+    def visit(self, day: int, target: game.Player):
         data = super().visit(day, target)
         self.opportunity -= 1
         if self.me.visits[day] is self.me:
@@ -422,14 +422,14 @@ class KillingVisiting(Visiting, Killing):
                     AbilityResultKey.BY_PUBLIC: Witch if self.me.controlled_by.role().belongs_to(Witch) else Beguiler
                 })
                 if self.me.controlled_by.role().belongs_to(Hiding):
-                    self.me.controlled_by.commit_crime(CrimeType.MURDER)
+                    self.me.controlled_by.commit_crime(game.CrimeType.MURDER)
             else:
                 data[AbilityResultKey.INDIVIDUAL][self.me].update({
                     AbilityResultKey.ALMOST_DIED: True,
                     AbilityResultKey.BY: Witch if self.me.controlled_by.role().belongs_to(Witch) else Beguiler,
                 })
         else:
-            self.me.commit_crime(CrimeType.TRESPASS)
+            self.me.commit_crime(game.CrimeType.TRESPASS)
             if self.me.visits[day].bodyguarded_by:
                 return self.me.visits[day].bodyguarded_by.pop().role().guard_from(self.me)
             data[AbilityResultKey.SOUND] = self.__class__
@@ -441,7 +441,7 @@ class KillingVisiting(Visiting, Killing):
                 if self.me.visits[day].is_healed():
                     data.update(self.me.visits[day].healed_by.pop().role().heal_against(self))
                 else:
-                    self.me.commit_crime(CrimeType.MURDER)
+                    self.me.commit_crime(game.CrimeType.MURDER)
                     data[AbilityResultKey.INDIVIDUAL][self.me.visits[day]] = {
                         AbilityResultKey.TYPE: AbilityResultKey.KILLED,
                         AbilityResultKey.BY: self.__class__
@@ -457,7 +457,7 @@ class KillingVisiting(Visiting, Killing):
         return data
 
 class CriminalKillingVisiting(KillingVisiting):
-    def visit(self, day: int, target: Player):
+    def visit(self, day: int, target: game.Player):
         data = super().visit(day, target)
         if data[AbilityResultKey.SOUND] is Bodyguard:
             return data
@@ -466,10 +466,10 @@ class CriminalKillingVisiting(KillingVisiting):
         return data
 
 class Boss(CriminalKillingVisiting):
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self.opportunity = 999
-        self.recruit_target: Optional[Player] = None
+        self.recruit_target: Optional[game.Player] = None
         self.immune_to_detection = True
 
     def second_task(self: Union[Godfather, DragonHead], day: int):
@@ -512,7 +512,7 @@ class Boss(CriminalKillingVisiting):
         self.recruit_target = None
 
 class Healing(Visiting):
-    def visit(self, day: int, target: Player):
+    def visit(self, day: int, target: game.Player):
         data = super().visit(day, target)
         self.me.visits[day].healed_by.append(self.me)
         return data
@@ -533,7 +533,7 @@ class Healing(Visiting):
         }
 
 class Blocking(Visiting):
-    def visit(self, day: int, blocked: Player):
+    def visit(self, day: int, blocked: game.Player):
         data = super().visit(day, blocked)
         if self.me.visits[day].role().belongs_to(Veteran) and self.me.visits[day].act[day]:
             pass
@@ -541,13 +541,13 @@ class Blocking(Visiting):
             self.me.visits[day].visits[day] = None
             self.me.visits[day].act[day] = False
             if self.me.visits[day].role().belongs_to(Town):
-                self.me.commit_crime(CrimeType.DISTURBING_THE_PEACE)
+                self.me.commit_crime(game.CrimeType.DISTURBING_THE_PEACE)
             data[AbilityResultKey.INDIVIDUAL][self.me.visits[day]] = {
                 AbilityResultKey.TYPE: AbilityResultKey.BLOCKED,
                 AbilityResultKey.SUCCESS: True
             }
             self.me.visits[day].role().respond_to_block(self.me)
-        self.me.commit_crime(CrimeType.SOLICITING)
+        self.me.commit_crime(game.CrimeType.SOLICITING)
         return data
 
 class Hiding(Visiting):
@@ -563,9 +563,9 @@ class Hiding(Visiting):
             }
         }
 
-    def visit(self, day: int, front: Player):
+    def visit(self, day: int, front: game.Player):
         data = super().visit(day, front)
-        self.me.commit_crime(CrimeType.TRESPASS)
+        self.me.commit_crime(game.CrimeType.TRESPASS)
         self.opportunity -= 1
         self.me.is_behind = self.me.visits[day]
         self.me.visits[day].controlled_by = self.me
@@ -582,7 +582,7 @@ class Hiding(Visiting):
         self.me.visits[self.me.room.day].controlled_by = None
 
 class Threatening(Visiting):
-    def visit(self, day: int, threatened: Player):
+    def visit(self, day: int, threatened: game.Player):
         data = super().visit(day, threatened)
         self.me.visits[day].blackmailed_on = day + 1
         data[AbilityResultKey.INDIVIDUAL][self.me.visits[day]] = {
@@ -599,9 +599,9 @@ class Sanitizing(Visiting):
             }
         }
 
-    def visit(self, day: int, sanitized: Player):
+    def visit(self, day: int, sanitized: game.Player):
         data = super().visit(day, sanitized)
-        self.me.commit_crime(CrimeType.TRESPASS)
+        self.me.commit_crime(game.CrimeType.TRESPASS)
         if (
             self.opportunity > 0
             and not self.me.visits[day].alive()
@@ -617,13 +617,13 @@ class Sanitizing(Visiting):
             return data
 
 class Framing(Visiting):
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self.immune_to_detection = True
 
-    def visit(self, day: int, framed: Player):
+    def visit(self, day: int, framed: game.Player):
         data = super().visit(day, framed)
-        self.me.commit_crime(CrimeType.TRESPASS)
+        self.me.commit_crime(game.CrimeType.TRESPASS)
         crime_pool = [c for c, done in self.me.visits[day].crimes.items() if not done]
         dest_pool = [evil.visits[day] for evil in self.me.room.remaining().values()
                      if evil.role().belongs_to(Mafia)
@@ -652,21 +652,21 @@ class Framing(Visiting):
         self.me.visits[self.me.room.day].framed.clear()
 
 class Investigating(Visiting):
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self.ignore_immune = False
 
-    def investigate(self, day: int, investigated: Player):
+    def investigate(self, day: int, investigated: game.Player):
         pass
 
-    def visit(self, day: int, investigated: Player):
+    def visit(self, day: int, investigated: game.Player):
         data = super().visit(day, investigated)
         data[AbilityResultKey.INDIVIDUAL][self.me][AbilityResultKey.RESULT] = self.investigate(day, self.me.visits[day])
         return data
 
 class Following(Investigating):
-    def investigate(self, day: int, investiagted: Player):
-        self.me.commit_crime(CrimeType.TRESPASS)
+    def investigate(self, day: int, investiagted: game.Player):
+        self.me.commit_crime(game.CrimeType.TRESPASS)
         if framed_to := investiagted.framed.get(FrameKey.TO):
             result = {
                 "visits": framed_to,
@@ -691,12 +691,12 @@ class Following(Investigating):
         return result
 
 class Watching(Investigating):
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self.can_target_self = True
     
-    def investigate(self, day: int, investigated: Player):
-        self.me.commit_crime(CrimeType.TRESPASS)
+    def investigate(self, day: int, investigated: game.Player):
+        self.me.commit_crime(game.CrimeType.TRESPASS)
         return sorted({
             v.index
             for v in self.me.room.actors_today
@@ -713,18 +713,18 @@ class FollowingAndWatching(Following, Watching):
                 ConstraintKey.DEFAULT: False,
             }
         }
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self.ignore_immune = True
 
-    def investigate(self, day: int, target: Player):
+    def investigate(self, day: int, target: game.Player):
         result = {
             Following.__name__.upper(): Following.investigate(self, day, target),
             Watching.__name__.upper(): Watching.investigate(self, day, target)
         }
         return result
     
-    def visit(self, day: int, investigated: Player):
+    def visit(self, day: int, investigated: game.Player):
         if self.constraints[ConstraintKey.DELAY]:
             self.rest_till = day + 1
         return super().visit(day, investigated)
@@ -738,12 +738,12 @@ class IdentityInvestigating(Investigating):
             }
         }
     
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self.detect_exact_role = self.constraints.get(ConstraintKey.DETECT_EXACT_ROLE) == "ROLE"
 
-    def investigate(self, investigated: Player):
-        self.me.commit_crime(CrimeType.TRESPASS)
+    def investigate(self, investigated: game.Player):
+        self.me.commit_crime(game.CrimeType.TRESPASS)
         if self.detect_exact_role:
             if framed_role := investigated.framed.get(FrameKey.ROLE):
                 return {"role": framed_role.name}
@@ -756,19 +756,19 @@ class IdentityInvestigating(Investigating):
             if self.ignore_immune:
                 return {"crimes": {c.name:value for c, value in investigated.crimes.items()}}
             elif investigated.role().immune_to_detection:
-                return {"crimes": {c.name:False for c in CrimeType}}
+                return {"crimes": {c.name:False for c in game.CrimeType}}
             return {"crimes": investigated.crimes}
 
 class Jailing(ActiveOnly, Killing):
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self._jailed = None
         self.opportunity = 2
         self.offense_level = Level.ABSOLUTE
-        self.want_to_jail: Optional[Player] = None
+        self.want_to_jail: Optional[game.Player] = None
 
-    def jail(self, jailed: Player):
-        self.me.commit_crime(CrimeType.KIDNAP)
+    def jail(self, jailed: game.Player):
+        self.me.commit_crime(game.CrimeType.KIDNAP)
         self._jailed = jailed
         self.is_jailing().jailed_by = self.me
         self._target_defense_level_before_jailed = self.is_jailing().role().defense_level
@@ -790,7 +790,7 @@ class Jailing(ActiveOnly, Killing):
     def act(self, day: int):
         data = super().act(day)
         self.opportunity -= 1
-        self.me.commit_crime(CrimeType.MURDER)
+        self.me.commit_crime(game.CrimeType.MURDER)
         data[AbilityResultKey.SOUND] = Jailor
         data[AbilityResultKey.INDIVIDUAL][self.is_jailing()] = {
             AbilityResultKey.TYPE: AbilityResultKey.KILLED,
@@ -828,7 +828,7 @@ class Cult(NeutralEvil):
     def against() -> set[Slot]:
         return {Town, Mafia, Triad, NeutralKilling}
 
-    def reveal_identity_to(self: Role, to: Player):
+    def reveal_identity_to(self: Role, to: game.Player):
         data = {
             AbilityResultKey.INDIVIDUAL: {
                 self.me: {
@@ -858,7 +858,7 @@ Roles
 ==========
 """
 class Scumbag(Role, NeutralEvil):
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self.recruitable_into = {Godfather:Mafioso, DragonHead:Enforcer}
 
@@ -871,7 +871,7 @@ class Executioner(Role, NeutralBenign):
             }
         }
 
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self.defense_level = Level.BASIC
 
@@ -935,7 +935,7 @@ class Spy(Role, TownPower):
 
 class Stump(Role, TownPower):
     not_for_first = True
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self.votes = 0
         self.defense_level = Level.BASIC
@@ -958,7 +958,7 @@ class Marshall(Role, TownGovernment):
             }
         }
 
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self.healable = False
         self.quota_per_lynch = self.constraints[ConstraintKey.QUOTA_PER_LYNCH]
@@ -969,15 +969,15 @@ class Marshall(Role, TownGovernment):
     def activate(self):
         self.opportunity -= 1
         self.me.room.in_lynch = True
-        return Event(EventType.DAY_EVENT, self.me.room.members, jsonablify({
-            ContentKey.ROLE: self.__class__,
+        return game.Event(game.EventType.DAY_EVENT, self.me.room.members, game.jsonablify({
+            game.ContentKey.ROLE: self.__class__,
             "index": self.me.index,
             "ace-attorney": self.me.room.in_court
         }))
 
 class Mayor(Role, TownGovernment): # TODO: 능력 발동 안 한 상태에서 투표한 뒤 발동하고서 투표 빼는 경우에 득표자의 득표수가 음수가 되는 버그 수정
     unique = True
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self.activated = False
         self.healable = False
@@ -989,8 +989,8 @@ class Mayor(Role, TownGovernment): # TODO: 능력 발동 안 한 상태에서 �
         self.activated = True
         self.me.room.mayor_reveal_today = True
         self.votes = 4
-        return Event(EventType.DAY_EVENT, self.me.room.members, jsonablify({
-            ContentKey.ROLE: self.__class__,
+        return game.Event(game.EventType.DAY_EVENT, self.me.room.members, game.jsonablify({
+            game.ContentKey.ROLE: self.__class__,
             "index": self.me.index
         }))
 
@@ -1012,8 +1012,8 @@ class Judge(Crying, NeutralEvil):
         self.votes = 4
         self.me.room.in_court = True
         self.rest_till = self.me.room.day + 1
-        return Event(EventType.DAY_EVENT, self.me.room.members, jsonablify({
-            ContentKey.ROLE: self.__class__,
+        return game.Event(game.EventType.DAY_EVENT, self.me.room.members, game.jsonablify({
+            game.ContentKey.ROLE: self.__class__,
             "ace-attorney": self.me.room.in_lynch
         }))
     
@@ -1025,7 +1025,7 @@ class Crier(Crying, TownGovernment):
     unique = True
 
 class Sheriff(Investigating, TownInvestigative):
-    def investigate(self, day: int, investigated: Player):
+    def investigate(self, day: int, investigated: game.Player):
         if investigated.role().immune_to_detection:
             return None
         for evil in {Mafia, Triad, SerialKiller, MassMurderer, Arsonist, Cult}:
@@ -1035,7 +1035,7 @@ class Sheriff(Investigating, TownInvestigative):
 
 class Coroner(Investigating, TownInvestigative):
     for_dead = True
-    def investigate(self, day: int, investigated: Player):
+    def investigate(self, day: int, investigated: game.Player):
         if investigated.death_announced():
             return {
                 "role": investigated.role().name,
@@ -1047,7 +1047,7 @@ class Coroner(Investigating, TownInvestigative):
         return {"alive": True}
 
 class Detective(Following, TownInvestigative):
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self.ignore_immune = True
 
@@ -1077,7 +1077,7 @@ class Secretary(IdentityInvestigating):
         })
         return data
     
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self.ignore_immune = True
 
@@ -1101,7 +1101,7 @@ class Counsel(IdentityInvestigating, NeutralBenign):
             },
         }
 
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self.detect_exact_role = True
     
@@ -1112,7 +1112,7 @@ class Counsel(IdentityInvestigating, NeutralBenign):
             if p is not self.me
         ], k=3))
 
-    def visit(self, day: int, investigated: Player):
+    def visit(self, day: int, investigated: game.Player):
         data = super().visit(day, investigated)
         self.target_was_detection_immune = self.me.visits[day].role().immune_to_detection
         self.me.visits[day].role().immune_to_detection = True
@@ -1123,12 +1123,12 @@ class Counsel(IdentityInvestigating, NeutralBenign):
         self.me.visits[self.me.room.day].role().immune_to_detection = self.target_was_detection_immune
 
 class Beguiler(Hiding, MafiaDeception):
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self.opportunity = 3
 
 class Deceiver(Hiding, TriadDeception):
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self.opportunity = 3
 
@@ -1141,18 +1141,18 @@ class Escort(Blocking, TownProtective):
             }
         }
 
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         if self.constraints[ConstraintKey.RECRUITABLE]:
             self.recruitable_into = {Godfather:Consort, DragonHead:Liaison}
 
 class Consort(Blocking, MafiaSupport):
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self.blockable = False
 
 class Liaison(Blocking, TriadSupport):
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self.blockable = False
 
@@ -1175,23 +1175,23 @@ class IncenseMaster(Sanitizing, TriadDeception):
     pass
 
 class Bodyguard(Visiting, TownProtective, TownKilling):
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self.offense_level = Level.STRONG
 
-    def visit(self, day: int, guarded: Player):
+    def visit(self, day: int, guarded: game.Player):
         data = super().visit(day, guarded)
         self.me.visits[day].bodyguarded_by.append(self.me)
         self._target_was_convertable_before_guarded = self.me.visits[day].role().convertable
         self.me.visits[day].role().convertable = False
         return data
 
-    def guard_from(self, attacker: Player) -> dict[AbilityResultKey, dict[Player, dict[AbilityResultKey, Type[Role]]]]:
+    def guard_from(self, attacker: game.Player) -> dict[AbilityResultKey, dict[game.Player, dict[AbilityResultKey, Type[Role]]]]:
         """경호원, 공격자, 피보호자에게 갈 정보를 만듭니다."""
         if self.me.bodyguarded_by:
             return self.me.bodyguarded_by.pop().role().guard_from(attacker)
         self.healable = False
-        attacker.commit_crime(CrimeType.MURDER)
+        attacker.commit_crime(game.CrimeType.MURDER)
         data = {
             AbilityResultKey.SOUND: self.__class__,
             AbilityResultKey.INDIVIDUAL: {
@@ -1219,7 +1219,7 @@ class Bodyguard(Visiting, TownProtective, TownKilling):
                     AbilityResultKey.TYPE: AbilityResultKey.KILLED,
                     AbilityResultKey.BY: self.__class__,
                 }
-                self.me.commit_crime(CrimeType.MURDER)
+                self.me.commit_crime(game.CrimeType.MURDER)
         else:
             data[AbilityResultKey.INDIVIDUAL][attacker] = {
                 AbilityResultKey.TYPE: AbilityResultKey.ALMOST_DIED,
@@ -1232,28 +1232,28 @@ class Bodyguard(Visiting, TownProtective, TownKilling):
         self.me.visits[self.me.room.day].role().convertable = self._target_was_convertable_before_guarded
 
 class Jailor(Jailing, TownPower, TownKilling):
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self.opportunity = 2
 
 class Kidnapper(Jailing, MafiaKilling, MafiaSupport):
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self.opportunity = 2
 
 class Interrogator(Jailing, TriadKilling, TriadSupport):
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self.opportunity = 2
 
 class MasonLeader(KillingVisiting, TownKilling, Mason):
     unique = True
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self.offense_level = Level.BASIC
         self.opportunity = 999
 
-    def visit(self, day: int, target: Player): # 기본 로직은 KillingVisiting의 visit과 같아야 합니다.
+    def visit(self, day: int, target: game.Player): # 기본 로직은 KillingVisiting의 visit과 같아야 합니다.
         data = Visiting.visit(self, day, target)
         self.opportunity -= 1
         self._target_was_convertable_before_offered = self.me.visits[day].role().convertable
@@ -1261,9 +1261,9 @@ class MasonLeader(KillingVisiting, TownKilling, Mason):
         if self.me.visits[day] is self.me:
             pass
         else:
-            self.me.commit_crime(CrimeType.SOLICITING)
+            self.me.commit_crime(game.CrimeType.SOLICITING)
             if self.me.visits[day].role().belongs_to(Cult):
-                self.me.commit_crime(CrimeType.TRESPASS)
+                self.me.commit_crime(game.CrimeType.TRESPASS)
                 if self.me.visits[day].bodyguarded_by:
                     return self.me.visits[day].bodyguarded_by.pop().role().guard_from(self.me)
                 data[AbilityResultKey.SOUND] = self.__class__
@@ -1275,7 +1275,7 @@ class MasonLeader(KillingVisiting, TownKilling, Mason):
                     if self.me.visits[day].is_healed():
                         data.update(self.me.visits[day].healed_by.pop().role().heal_against(self))
                     else:
-                        self.me.commit_crime(CrimeType.MURDER)
+                        self.me.commit_crime(game.CrimeType.MURDER)
                         data[AbilityResultKey.INDIVIDUAL][self.me.visits[day]] = {
                             AbilityResultKey.TYPE: AbilityResultKey.KILLED,
                             AbilityResultKey.BY: self.__class__
@@ -1345,7 +1345,7 @@ class Veteran(ActiveOnly, TownKilling, TownPower):
     def act(self, day: int):
         super().act(day)
         self.opportunity -= 1
-        self.me.commit_crime(CrimeType.DISTRUCTION_OF_PROPERTY)
+        self.me.commit_crime(game.CrimeType.DISTRUCTION_OF_PROPERTY)
         self.defense_level = Level.STRONG
         events = [{
             AbilityResultKey.INDIVIDUAL: {
@@ -1370,7 +1370,7 @@ class Veteran(ActiveOnly, TownKilling, TownPower):
                         AbilityResultKey.TYPE: AbilityResultKey.KILLED,
                         AbilityResultKey.BY: self.__class__,
                     }
-                    self.me.commit_crime(CrimeType.MURDER)
+                    self.me.commit_crime(game.CrimeType.MURDER)
             else:
                 event[AbilityResultKey.INDIVIDUAL][visitor] = {
                     AbilityResultKey.TYPE: AbilityResultKey.ALMOST_DIED,
@@ -1396,11 +1396,11 @@ class Vigilante(KillingVisiting, TownKilling):
             }
         }
 
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self.rest_till = 1 # 첫날 밤 살인 불가. 단 조종당하면 가능.
     
-    def visit(self, day: int, target: Player):
+    def visit(self, day: int, target: game.Player):
         data = super().visit(day, target)
         if (self.me.visits[day] is not self.me
             and self.me.visits[day].role().belongs_to(Town)
@@ -1427,12 +1427,12 @@ class Vigilante(KillingVisiting, TownKilling):
         return data
 
 class Mafioso(CriminalKillingVisiting, MafiaKilling):
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self.opportunity = 999
 
 class Enforcer(CriminalKillingVisiting, TriadKilling):
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self.opportunity = 999
 
@@ -1452,7 +1452,7 @@ class Citizen(Surviving, TownGovernment):
             }
         }
 
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self.opportunity = 1
         if self.constraints[ConstraintKey.RECRUITABLE]:
@@ -1480,9 +1480,9 @@ class Cultist(Visiting, Cult):
             }
         }
 
-    def visit(self, day: int, culted: Player):
+    def visit(self, day: int, culted: game.Player):
         data = super().visit(day, culted)
-        self.me.commit_crime(CrimeType.SOLICITING)
+        self.me.commit_crime(game.CrimeType.SOLICITING)
         if self.me.visits[day].role().belongs_to(Mason):
             return self.reveal_identity_to(self.me.visits[day])
         elif (self.me.visits[day].role().belongs_to(Mafia)
@@ -1499,7 +1499,7 @@ class Cultist(Visiting, Cult):
                 AbilityResultKey.BY: None,
             }
         else:
-            self.me.commit_crime(CrimeType.CONSPIRICY)
+            self.me.commit_crime(game.CrimeType.CONSPIRICY)
             if self.me.visits[day].role().belongs_to(Doctor) or self.me.visits[day].role().belongs_to(Witch):
                 for index, other in self.me.room.lineup.items():
                     if other.role().belongs_to(WitchDoctor):
@@ -1523,7 +1523,7 @@ class Cultist(Visiting, Cult):
         return data
 
 class Doctor(Healing, TownProtective):
-    def visit(self, day: int, healed: Player):
+    def visit(self, day: int, healed: game.Player):
         data = super().visit(day, healed)
         self._target_was_convertable_before_healed = self.me.visits[day].role().convertable
         self.me.visits[day].role().convertable = False
@@ -1551,7 +1551,7 @@ class WitchDoctor(Healing, Cult):
             }
         }
 
-    def visit(self, day: int, healed: Player):
+    def visit(self, day: int, healed: game.Player):
         data = super().visit(day, healed)
         if self.me.visits[day].role().belongs_to(Mason):
             return self.reveal_identity_to(self.me.visits[day])
@@ -1578,7 +1578,7 @@ class WitchDoctor(Healing, Cult):
     def second_task(self, day: int):
         if not self.me.visits[day].alive(): return
         super().second_task(day)
-        self.me.commit_crime(CrimeType.CONSPIRICY)
+        self.me.commit_crime(game.CrimeType.CONSPIRICY)
         self.opportunity -= 1
         data = {
             AbilityResultKey.INDIVIDUAL: {
@@ -1619,12 +1619,12 @@ class Witch(Visiting, NeutralEvil):
             }
         }
 
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
-        self.second_target: Optional[Player] = None
+        self.second_target: Optional[game.Player] = None
         self.can_target_self = True
 
-    def visit(self, day: int, controlled: Player):
+    def visit(self, day: int, controlled: game.Player):
         if destination := self.second_target:
             data = super().visit(day, controlled)
             self.me.visits[day].visits[day] = destination
@@ -1651,7 +1651,7 @@ class Auditor(Visiting, NeutralEvil):
             }
         }
 
-    def visit(self, day: int, auditted: Player):
+    def visit(self, day: int, auditted: game.Player):
         data = super().visit(day, auditted)
         target_role = self.me.visits[day].role()
         if target_role is self:
@@ -1701,11 +1701,11 @@ class Amnesiac(Visiting, NeutralBenign):
             }
         }
     
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self.blockable = False
 
-    def visit(self, day: int, remembered: Player):
+    def visit(self, day: int, remembered: game.Player):
         data = super().visit(day, remembered)
         data[AbilityResultKey.INDIVIDUAL][self.me] = {
             AbilityResultKey.TYPE: AbilityResultKey.CONVERTED,
@@ -1715,12 +1715,12 @@ class Amnesiac(Visiting, NeutralBenign):
 
 class SerialKiller(KillingVisiting, NeutralKilling):
     default_to_exclude = False
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self.opportunity = 999
         self.offense_level = Level.BASIC
         self.defense_level = Level.BASIC
-        self.blocked_by: set[Player] = set()
+        self.blocked_by: set[game.Player] = set()
         self.immune_to_detection = True
     
     def against() -> set[Slot]:
@@ -1763,7 +1763,7 @@ class SerialKiller(KillingVisiting, NeutralKilling):
                 }
             }
 
-    def respond_to_block(self, blocker: Player):
+    def respond_to_block(self, blocker: game.Player):
         self.blocked_by.add(blocker)
 
     def after_night(self):
@@ -1784,7 +1784,7 @@ class MassMurderer(Visiting, NeutralKilling):
             }
         }
 
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self.offense_level = Level.BASIC
         self.defense_level = Level.BASIC
@@ -1797,7 +1797,7 @@ class MassMurderer(Visiting, NeutralKilling):
     def team():
         return MassMurderer
 
-    def visit(self, day: int, landlord: Player):
+    def visit(self, day: int, landlord: game.Player):
         data = super().visit(day, landlord)
         victims = {v for v in landlord.visited_by[day] if v is not self.me}
         if not landlord.visits[day] and landlord is not self.me:
@@ -1832,12 +1832,12 @@ class Arsonist(ActiveAndVisiting, NeutralKilling):
             }
         }
 
-    def __init__(self, me: Player, constraints: dict):
+    def __init__(self, me: game.Player, constraints: dict):
         super().__init__(me, constraints)
         self.offense_level = Level.ABSOLUTE
         self.defense_level = Level.BASIC
         self.opportunity = 999
-        self.blocked_by: set[Player] = set()
+        self.blocked_by: set[game.Player] = set()
 
     def against() -> set[Slot]:
         return {Town, Mafia, Triad, Cult, SerialKiller, MassMurderer}
@@ -1845,7 +1845,7 @@ class Arsonist(ActiveAndVisiting, NeutralKilling):
     def team():
         return Arsonist
 
-    def visit(self, day: int, oiled: Player):
+    def visit(self, day: int, oiled: game.Player):
         data = super().visit(day, oiled)
         self.me.visits[day].oiled = True
         data[AbilityResultKey.INDIVIDUAL][self.me].update({
@@ -1853,7 +1853,7 @@ class Arsonist(ActiveAndVisiting, NeutralKilling):
             AbilityResultKey.SUCCESS: True,
             AbilityResultKey.INDEX: self.me.visits[day].index,
         })
-        self.me.commit_crime(CrimeType.TRESPASS)
+        self.me.commit_crime(game.CrimeType.TRESPASS)
         if self.constraints[ConstraintKey.NOTIFIED]:
             data[AbilityResultKey.INDIVIDUAL][self.me.visits[day]] = {
                 AbilityResultKey.TYPE: AbilityResultKey.NOTIFIED,
@@ -1888,12 +1888,12 @@ class Arsonist(ActiveAndVisiting, NeutralKilling):
             return data
 
     def act(self, day: int):
-        self.me.commit_crime(CrimeType.DISTRUCTION_OF_PROPERTY)
-        self.me.commit_crime(CrimeType.ARSON)
+        self.me.commit_crime(game.CrimeType.DISTRUCTION_OF_PROPERTY)
+        self.me.commit_crime(game.CrimeType.ARSON)
         first_victims = {v for v in self.me.room.actors_today if v.oiled}
-        second_victims = {v.visits[day] for v in first_victims if len(v.visits) > day and v.visits[day] and isinstance(v.visits[day], Player)}
+        second_victims = {v.visits[day] for v in first_victims if len(v.visits) > day and v.visits[day] and isinstance(v.visits[day], game.Player)}
         victims = first_victims.union(second_victims)
-        data: dict[AbilityResultKey, dict[Player, dict[AbilityResultKey, type]]] = {
+        data: dict[AbilityResultKey, dict[game.Player, dict[AbilityResultKey, type]]] = {
             AbilityResultKey.SOUND: self.__class__,
             AbilityResultKey.INDIVIDUAL: {
                 self.me: {
@@ -1906,14 +1906,14 @@ class Arsonist(ActiveAndVisiting, NeutralKilling):
             if v.is_healed():
                 data[AbilityResultKey.INDIVIDUAL].update(v.healed_by.pop().role().heal_against(self))
             else:
-                self.me.commit_crime(CrimeType.MURDER)
+                self.me.commit_crime(game.CrimeType.MURDER)
                 data[AbilityResultKey.INDIVIDUAL][v] = {
                     AbilityResultKey.TYPE: AbilityResultKey.KILLED,
                     AbilityResultKey.BY: self.__class__,
                 }
         return data
 
-    def respond_to_block(self, blocker: Player):
+    def respond_to_block(self, blocker: game.Player):
         self.blocked_by.add(blocker)
     
     def after_night(self):

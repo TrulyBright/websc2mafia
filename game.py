@@ -11,28 +11,215 @@ from asyncio.tasks import Task
 from enum import Enum, IntEnum, auto, unique
 from typing import Any, Optional, Union, Callable, Type
 from websockets.exceptions import ConnectionClosed
-from starlette.websockets import WebSocket
+from starlette.websockets import WebSocket, WebSocketDisconnect
 from log import logger
-from ws import broadcast_room_status_change
 import db
 import roles
 
-recording_tasks: list[Task] = [] # TODO: 기록 태스크 모아보기
 DEMOCRACY = "Democracy"
 
+class BroadCaster:
+    def __init__(self, server: GameServer):
+        self.server = server
+
+    async def connection(self, connected: User):
+        await asyncio.gather(*[user.listen({
+            "type": "CONNECT",
+            "content": {
+                "username": connected.username
+            }
+        }) for user in self.server.online if user is not connected])
+
+    async def disconnection(self, disconnected: User):
+        await asyncio.gather(*[user.listen({
+            "type": "DISCONNECT",
+            "content": {
+                "username": disconnected.username
+            }
+        }) for user in self.server.online])
+
+    async def room_status_change(self, room: Room):
+        await asyncio.gather(*[user.listen({
+            "type": "ROOM_STATUS",
+            "status": room.info()
+        }) for user in self.server.online])
+
+    async def new_room(self, room: Room):
+        await asyncio.gather(*[user.listen({
+            "type": "NEW_ROOM",
+            "room": room.info()
+        }) for user in self.server.online])
+
+    async def deleted_room(self, room: Room):
+        await asyncio.gather(*[user.listen({
+            "type": "DELETED_ROOM",
+            "id": room.id
+        }) for user in self.server.online])
+
+class GameServer:
+    def __init__(self):
+        self.broadcaster = BroadCaster(self)
+        self.online: set[User] = set()
+        self.rooms: dict[int, Room] = dict()
+        self.running_games: list[Task] = []
+        self.recording_tasks: list[Task] = []
+        self.next_username = 0
+        self.next_room_id = 1
+
+    async def endpoint(self, ws: WebSocket):
+        if ws.app.debug:
+            self.next_username += 1
+        elif not ws.user.is_authenticated:
+            return
+        connected = User(
+            self.next_username if ws.app.debug else ws.username, ws)
+        self.online.add(connected)
+        await ws.accept()
+        logger.info(f"connected: {connected.username}")
+        welcoming = asyncio.create_task(self.broadcaster.connection(connected))
+        try:
+            rooms_data = [room.info() for room in self.rooms.values()]
+            data = {
+                "type": "INITIAL_INFORMATION",
+                "online": [user.username for user in self.online],
+                "rooms": rooms_data,
+                "username": connected.username,
+            }
+            await connected.listen(data)
+            while message := await ws.receive_json():
+                ws._raise_on_disconnect(message)
+                await self.process_message(connected, message)
+        except WebSocketDisconnect:
+            if connected.room:
+                await self.leave_and_delete_room_if_empty(connected)
+        finally:
+            logger.info(f"{connected} disconncted")
+            welcoming.cancel()
+            with suppress(asyncio.CancelledError):
+                await welcoming
+            self.online.remove(connected)
+            if connected.room:
+                await self.leave_and_delete_room_if_empty(connected)
+            try:
+                await ws.close()
+            except:
+                logger.error(
+                    f"ERROR while closing {ws} of {connected}", exc_info=True)
+            await self.broadcaster.disconnection(connected)
+
+    async def leave_and_delete_room_if_empty(self, user: User):
+        left = user.room
+        await user.leave()
+        if left.empty():
+            if left.id in self.rooms:
+                del self.rooms[left.id]
+                await self.broadcaster.deleted_room(left)
+
+    async def process_message(self, user: User, message: dict):
+        msg_type = message["type"]
+        if msg_type == EventType.CREATE.name and not user.room:
+            assert message.get("title")
+            self.next_room_id += 1
+            created = Room(host=user,
+                           title=message["title"],
+                           password=message["password"],
+                           capacity=15,
+                           room_id=self.next_room_id)
+            logger.debug(f"{user} creates {created}")
+            # TODO: Event로 바꿔야 할까?
+            await user.listen({"type": EventType.CREATE.name, "content": {"CREATED": created.id}})
+            await user.enter(created)
+            self.rooms[created.id] = created
+            await self.broadcaster.new_room(created)
+        elif msg_type == EventType.ENTER.name and not user.room:
+            if room := self.rooms.get(message["id"]):
+                if room.full():
+                    pass  # TODO: 방이 가득 찼습니다.
+                elif room.phase() is PhaseType.INITIATING:
+                    # TODO: 게임 초기화 중에는 입장할 수 없습니다. 최대 10초까지 기다렸다가 입장해 주세요.
+                    pass
+                else:
+                    await user.enter(room)
+            else:
+                pass  # TODO: 그런 방이 없습니다.
+        elif msg_type == EventType.LEAVE.name and user.room:
+            await self.leave_and_delete_room_if_empty(user)
+        elif msg_type == EventType.MESSAGE.name and user.room:
+            if is_command(message["text"], Command.BEGIN):
+                if user is user.room.host:
+                    if user.room.in_game():
+                        pass
+                    elif not user.room.setup:
+                        await user.room.emit(Event(EventType.ERROR, user.room.members, {
+                            ContentKey.REASON.name: "설정이 없어 시작할 수 없습니다."
+                        }))
+                    elif len(user.room.members) != len(user.room.setup.formation):
+                        await user.room.emit(Event(EventType.ERROR, user.room.members, {
+                            ContentKey.REASON.name: f"설정은 {len(user.room.setup.formation)}인이지만 현재 인원은 {len(user.room.members)}인입니다."
+                        }))
+                    else:
+                        logger.info(
+                            f"Host({user}) requested game start in {user.room}")
+                        task_name = f"game in {user.room.id}"
+                        await user.room.turn_phase(PhaseType.INITIATING)
+                        self.running_games.append(asyncio.create_task(
+                            user.room.run_game(user.ws.app.debug), name=task_name))
+                        logger.debug(f"create game task <{task_name}>")
+                else:
+                    await user.room.emit(Event(EventType.ERROR, user, {ContentKey.REASON.name: "게임은 방장이 시작할 수 있습니다."}))
+            else:
+                try:
+                    await user.speak(message["text"])
+                except:
+                    # 유저 접속은 유지하고 예외만 띄움
+                    logger.error(
+                        f"Error while processing {user}'s message: {message['text']}", exc_info=True)
+        elif msg_type == EventType.SETUP.name and user.room and user is user.room.host:
+            setup = message["setup"]
+            try:
+                user.room.setup = Setup(
+                    setup["title"],
+                    user,
+                    setup["formation"],
+                    setup["constraints"],
+                    setup["exclusion"]
+                )
+            except SetupMalformed as e:
+                logger.warning(
+                    f"{user} malformed a formation({e}) for: {user.room}")
+                # await leave_and_delete_room_if_empty(user)
+                # await user.ws.close()
+                # TODO: add to blacklist
+                await user.room.emit(Event(EventType.ERROR, user, {ContentKey.REASON.name: "있을 수 없는 값이 설정에 있습니다."}))
+            except SetupInvalid as e:
+                await user.room.emit(Event(EventType.ERROR, user, {ContentKey.REASON.name: str(e)}))
+            except:
+                logger.error(
+                    f"{user}의 설정 적용 중 알 수 없는 오류가 발생했습니다.", exc_info=True)
+                await user.room.emit(Event(EventType.ERROR, user, {ContentKey.REASON.name: "설정 적용 중 알 수 없는 오류가 발생했습니다."}))
+            else:
+                await user.room.emit(Event(EventType.SETUP, user.room.members, user.room.setup.jsonablify()))
+
+
 def jsonablify(injsonable: dict):
-    remove_enum: Callable[[dict], dict] = lambda data: {key.name if isinstance(key, Enum) else key:value for key, value in {key:value.name if isinstance(value, Enum) else value for key, value in data.items()}.items()}
-    remove_class: Callable[[dict], dict] = lambda data: {key.__name__ if inspect.isclass(key) else key:value for key, value in {key:value.__name__ if inspect.isclass(value) else value for key, value in data.items()}.items()}
+    remove_enum: Callable[[dict], dict] = lambda data: {key.name if isinstance(key, Enum) else key: value for key, value in {
+        key: value.name if isinstance(value, Enum) else value for key, value in data.items()}.items()}
+    remove_class: Callable[[dict], dict] = lambda data: {key.__name__ if inspect.isclass(key) else key: value for key, value in {
+        key: value.__name__ if inspect.isclass(value) else value for key, value in data.items()}.items()}
     return remove_class(remove_enum(injsonable))
+
 
 def is_command(msg: str, command: Command):
     return msg.startswith(command.value)
 
+
 class SetupInvalid(Exception):
     """설정이 잘못된 경우."""
 
+
 class SetupMalformed(Exception):
     """설정이 악의로 조작된 경우."""
+
 
 @unique
 class CrimeType(Enum):
@@ -47,12 +234,14 @@ class CrimeType(Enum):
     DISTRUCTION_OF_PROPERTY = "재물 손괴"
     ARSON = "방화"
 
+
 @unique
 class VoteType(IntEnum):
     ABSTENTION = 0
     GUILTY = 1
     INNOCENT = -1
     SKIP = 58826974
+
 
 @unique
 class PhaseType(Enum):
@@ -70,6 +259,7 @@ class PhaseType(Enum):
     POST_EXECUTION = auto()
     EVENING = auto()
     NIGHT = auto()
+
 
 @unique
 class Command(Enum):
@@ -91,6 +281,7 @@ class Command(Enum):
     SUICIDE = "/자살"
     NICKNAME = "/닉네임"
 
+
 @unique
 class ContentKey(Enum):
     MESSAGE = auto()
@@ -111,6 +302,7 @@ class ContentKey(Enum):
     OPPORTUNITY = auto()
     SHOW_ROLE_NAME = auto()
     IS_LINEUP_MEMBER = auto()
+
 
 @unique
 class EventType(Enum):
@@ -155,7 +347,8 @@ class EventType(Enum):
     DEAD = auto()
     IDENTITY_REVEAL = auto()
     NUMBER_OF_DEAD = auto()
-    
+
+
 class Event:
     """이벤트 클래스.
     누가 누구에게 어떤 이벤트를 어떤 내용으로 보내야 하는지가 적혀 있습니다.
@@ -167,20 +360,22 @@ class Event:
         `from_`: 이벤트를 보내는 사람의 정체(`User`). 기본값은 `None`입니다. 정체는 받는 사람에게 알려져서는 안 됩니다.
         `no_record`: 게임 중에 일어난 특정 이벤트를 기록하지 않을지 여부. 기본값은 `False`입니다.
     """
+
     def __init__(self,
                  event_type: EventType,
                  to: Union[list, User, Player],
                  content: dict,
-                 from_: Optional[Union[User, Player]]=None,
-                 no_record: bool=False):
+                 from_: Optional[Union[User, Player]] = None,
+                 no_record: bool = False):
         self.type = event_type
         self.to = to if isinstance(to, list) else [to]
         self.content = content
         self.from_ = from_.user if isinstance(from_, Player) else from_
         self.no_record = no_record
-    
+
     def __repr__(self) -> str:
         return f"<Event {self.type} {self.from_ if self.from_ else ''} -> {self.to}>"
+
 
 class Setup:
     """설정 클래스. 설정이 올바르지 않다면 만들어질 수 없습니다.
@@ -192,6 +387,7 @@ class Setup:
         constraints: 직업 세부 설정.
         exclusion: 제외 설정.
     """
+
     def __init__(self,
                  title: str,
                  inventor: User,
@@ -215,8 +411,10 @@ class Setup:
         pool = roles.pool()
         slots: list[Union[Type[roles.Role], Type[roles.Slot]]] = []
         competitors: set[Type[roles.Slot]] = set()
-        constraints_with_constructors: dict[Type[roles.Role], dict[Union[roles.ConstraintKey, str], Union[roles.Level, str, bool, int]]] = dict()
-        exclusion_with_constructors: dict[Type[roles.Slot], list[Type[Union[roles.Slot, roles.Role]]]] = dict()
+        constraints_with_constructors: dict[Type[roles.Role],
+                                            dict[Union[roles.ConstraintKey, str], Union[roles.Level, str, bool, int]]] = dict()
+        exclusion_with_constructors: dict[Type[roles.Slot],
+                                          list[Type[Union[roles.Slot, roles.Role]]]] = dict()
         for slot in formation:
             for name, constructor in pool:
                 if slot == name:
@@ -235,12 +433,14 @@ class Setup:
                             value = roles.Level[value] if value in roles.Level.__members__ else value
                             option = roles.ConstraintKey[option] if option in roles.ConstraintKey.__members__ else option
                             if option not in modifiable:
-                                raise SetupMalformed(f"{slot}의 세부 설정이 악의로 조작되었습니다. {option}은 존재하지 않는 설정입니다.")
+                                raise SetupMalformed(
+                                    f"{slot}의 세부 설정이 악의로 조작되었습니다. {option}은 존재하지 않는 설정입니다.")
                             option_range = modifiable[option][roles.ConstraintKey.OPTIONS]
                             if value in option_range:
                                 constraints_with_constructors[constructor][option] = value
                             else:
-                                raise SetupMalformed(f"{slot}의 세부 설정이 악의로 조작되었습니다. {option}의 선택지 {option_range}에 {value}가 없습니다.")
+                                raise SetupMalformed(
+                                    f"{slot}의 세부 설정이 악의로 조작되었습니다. {option}의 선택지 {option_range}에 {value}가 없습니다.")
                     break
             else:
                 raise SetupMalformed(f"직업이 아닌 {slot}을(를) 설정하려고 시도했습니다.")
@@ -251,21 +451,26 @@ class Setup:
                     for excluded in {name for name, is_excluded in exclusion_dict.items() if is_excluded}:
                         for excluded_name, excluded_constructor in pool:
                             if excluded == excluded_name:
-                                exclusion_with_constructors[excluding_constructor].append(excluded_constructor)
+                                exclusion_with_constructors[excluding_constructor].append(
+                                    excluded_constructor)
                                 break
                         else:
                             if excluding_constructor is roles.Any:
                                 if excluded == roles.Killing.__name__:
-                                    exclusion_with_constructors[excluding_constructor].append(roles.Killing)
+                                    exclusion_with_constructors[excluding_constructor].append(
+                                        roles.Killing)
                                 else:
                                     for n, t in roles.teams():
                                         if excluded == n:
-                                            exclusion_with_constructors[excluding_constructor].append(t)
+                                            exclusion_with_constructors[excluding_constructor].append(
+                                                t)
                                             break
                                     else:
-                                        raise SetupMalformed(f"{excluded}(이)란 칸은 제외할 수 없습니다.")
+                                        raise SetupMalformed(
+                                            f"{excluded}(이)란 칸은 제외할 수 없습니다.")
                             else:
-                                raise SetupMalformed(f"{excluded}(이)란 칸은 제외할 수 없습니다.")
+                                raise SetupMalformed(
+                                    f"{excluded}(이)란 칸은 제외할 수 없습니다.")
                     break
             else:
                 raise SetupMalformed(f"{from_}(이)란 칸은 무작위 칸이 아닙니다.")
@@ -330,7 +535,8 @@ class Setup:
                     if issubclass(team, roles.Town):
                         break
                 else:
-                    raise SetupInvalid(f"{roles.Executioner.__name__}가 목표로 설정할 {roles.Town.__name__} 세력이 등장할 수 없습니다.")
+                    raise SetupInvalid(
+                        f"{roles.Executioner.__name__}가 목표로 설정할 {roles.Town.__name__} 세력이 등장할 수 없습니다.")
         self.trial()
         self.title = title[:16].strip()
         self.inventor = inventor.username
@@ -340,7 +546,7 @@ class Setup:
     def trial(self) -> list[Type[roles.Role]]:
         """직업 구성에 의거하여 즉시 배정가능한 직업 목록을 생성합니다."""
         return [random.choice(pool) for pool in self.pool_per_slot]
-    
+
     # @staticmethod
     # def _validate_uniqueness(slot_index: int,
     #                          reduced: list[list[Type[roles.Role]]],
@@ -351,7 +557,7 @@ class Setup:
     #     생성가능한 직업이 있다면:
     #         `slot_index`번 칸에서 생성가능하면서 `unique==True`인 각 직업에 대하여,
     #         그 직업이 `slot_index`번 칸에서 생성된 경우에 `slot_index+1`번 칸에 생성가능한 직업이 있는지 검사합니다.
-        
+
     #     Raises:
     #         `SetupInvalid`: `slot_index`번 칸에 생성가능한 직업이 없는 경우.
     #     """
@@ -422,10 +628,11 @@ class Setup:
                 for role, constraint in self.constraints.items()
             },
             "exclusion": {
-                key.__name__:[slot.__name__ for slot in excluded]
+                key.__name__: [slot.__name__ for slot in excluded]
                 for key, excluded in self.exclusion.items()
             },
         }
+
 
 class Room:
     """게임방.
@@ -464,21 +671,26 @@ class Room:
             `submitted_nickname`: 유저별 닉네임.
             `there_is`: 세력별 생존자.
     """
+
     def __init__(self,
                  host: User,
                  title: str,
                  capacity: int,
                  room_id: int,
-                 password: Optional[str]=None):
+                 broadcaster: BroadCaster,
+                 recording_tasks: list[Task],
+                 password: Optional[str] = None):
         self.host = host
         self.members: list[User] = []
         self.title = title[:16].strip()
         self.capacity = capacity
         self.id = room_id
+        self.broadcaster = broadcaster
         self.password = password[:8] if password else None
         self.start_requested = False
         self._phase = PhaseType.IDLE
         self.setup: Setup = None
+        self.recording_tasks = recording_tasks
 
     def __repr__(self):
         return f"<Room #{self.id} {len(self.members)}/{self.capacity}{' '+self.phase().name if hasattr(self, '_phase') else ''}>"
@@ -502,7 +714,7 @@ class Room:
 
     def remaining(self):
         """생존한 `Player`들."""
-        return {i:p for i, p in self.lineup.items() if p.alive()}
+        return {i: p for i, p in self.lineup.items() if p.alive()}
 
     async def reveal_identity(self, dead: Player):
         """망자의 직업과 유언을 공표합니다.
@@ -543,7 +755,7 @@ class Room:
             roles.Mason: [],
             roles.Cult: [],
             roles.Spy: [],
-        } # set이 아니라 list로 하는 것은 항상 첫 번째 teammate가 BOSS/INTERN이 되도록 하기 위함.
+        }  # set이 아니라 list로 하는 것은 항상 첫 번째 teammate가 BOSS/INTERN이 되도록 하기 위함.
         # 자세한 건 trigger_evening_events() 참고.
         self.graveyard: list[Player] = []
         self.winners: list[tuple[Player, roles.Role]] = []
@@ -576,7 +788,8 @@ class Room:
         await asyncio.sleep(5 if debug_mode else 30)
         self.lineup = {
             index+1: Player(user,
-                            self.submitted_nickname.get(user, str(user.username)+"in-game"), # TODO: 견본 닉네임
+                            self.submitted_nickname.get(
+                                user, str(user.username)+"in-game"),  # TODO: 견본 닉네임
                             index+1,
                             self.formation[index],
                             self.setup.constraints[self.formation[index]],
@@ -593,7 +806,7 @@ class Room:
             })) for p in self.lineup.values()
         ])
         await self.emit(Event(EventType.LINEUP, self.members, {
-            "lineup": {i:p.nickname for i, p in self.lineup.items()}
+            "lineup": {i: p.nickname for i, p in self.lineup.items()}
         }))
         await asyncio.sleep(5)
         await asyncio.gather(*[
@@ -633,8 +846,9 @@ class Room:
                 await self.timer(self.phase(), self.TIME[self.phase()])
                 await self.turn_phase(PhaseType.NIGHT)
                 await self.trigger_night_events()
-                await asyncio.sleep(1 if debug_mode else 5) # 최소한 5초는 쉬고 낮이 됩니다.
-                self.day +=1
+                # 최소한 5초는 쉬고 낮이 됩니다.
+                await asyncio.sleep(1 if debug_mode else 5)
+                self.day += 1
                 for i, r in self.remaining().items():
                     r.extend_action_record()
                 # 아침
@@ -675,16 +889,18 @@ class Room:
                     await self.turn_phase(PhaseType.VOTE)
                     try:
                         began_at = time.time()
-                        timer = asyncio.create_task(self.timer(self.phase(), remaining))
+                        timer = asyncio.create_task(
+                            self.timer(self.phase(), remaining))
                         await asyncio.wait_for(self.election.wait(), remaining)
-                    except asyncio.TimeoutError: # 아무도 달리지 않음.
+                    except asyncio.TimeoutError:  # 아무도 달리지 않음.
                         break
-                    else: # 누가 달렸거나 투표가 생략됨.
+                    else:  # 누가 달렸거나 투표가 생략됨.
                         if self.skip_votes > len(self.remaining())/2:
                             # TODO: SKIP
                             break
                         remaining -= time.time()-began_at
-                        self.elected = max(self.remaining().values(), key=lambda u:u.voted_count)
+                        self.elected = max(
+                            self.remaining().values(), key=lambda u: u.voted_count)
                         hung = False
                         await self.turn_phase(PhaseType.ELECTION)
                         await self.timer(self.phase(), self.TIME[self.phase()])
@@ -701,7 +917,7 @@ class Room:
                             await self.turn_phase(PhaseType.VOTE_EXECUTION)
                             await self.timer(self.phase(), self.TIME[self.phase()])
                             result = {
-                                i:voter.execution_choice.value*voter.role().votes
+                                i: voter.execution_choice.value*voter.role().votes
                                 for i, voter in self.remaining().items()
                             }
                             await self.emit(Event(EventType.VOTE_EXECUTION_RESULT, self.members, result))
@@ -720,7 +936,8 @@ class Room:
                                     or r.execution_choice is VoteType.GUILTY
                                 ]
                                 if self.elected.role().constraints[roles.ConstraintKey.VICTIMS] == "ONE":
-                                    self.suiciders[self.elected.role()] = random.choice(pool)
+                                    self.suiciders[self.elected.role()] = random.choice(
+                                        pool)
                                 else:
                                     self.suiciders[self.elected.role()] = pool
                             await self.elected.die(DEMOCRACY)
@@ -740,7 +957,7 @@ class Room:
                         for i, m in self.remaining().items():
                             if (m.role().belongs_to(roles.Counsel)
                                 and m.role().goal_target.intersection(self.executed)
-                                and m.role().constraints[roles.ConstraintKey.IF_FAIL] == "SUICIDE"):
+                                    and m.role().constraints[roles.ConstraintKey.IF_FAIL] == "SUICIDE"):
                                 self.suiciders[m.role()] = [m]
                 await self.turn_phase(PhaseType.POST_EXECUTION)
                 for e in self.executed:
@@ -758,7 +975,8 @@ class Room:
         else:
             logger.info(f"A game finished in: {self}")
         finally:
-            recording_tasks.append(asyncio.create_task(db.archive(GameData(self))))
+            self.recording_tasks.append(
+                asyncio.create_task(db.archive(GameData(self))))
             for r in self.members:
                 if r.player in self.lineup.values():
                     r.player = None
@@ -789,7 +1007,8 @@ class Room:
             )
             for category in priority:
                 if self.there_is[category]:
-                    self.win_them_all(category, not issubclass(category, roles.NeutralKilling))
+                    self.win_them_all(category, not issubclass(
+                        category, roles.NeutralKilling))
                     main_winner = category
                     break
             else:
@@ -826,13 +1045,14 @@ class Room:
                     return 6
                 if role.belongs_to(roles.Amnesiac):
                     return 7
-            first_winner: Player = sorted(self.winners, key=lambda u: _solo_priority(u[1]))[0]
-            win_alone = len(self.winners) == 1 and len(list(itertools.filterfalse(lambda t:first_winner.role().belongs_to(t), {
+            first_winner: Player = sorted(
+                self.winners, key=lambda u: _solo_priority(u[1]))[0]
+            win_alone = len(self.winners) == 1 and len(list(itertools.filterfalse(lambda t: first_winner.role().belongs_to(t), {
                 roles.Town,
                 roles.Mafia,
                 roles.Triad,
                 roles.Cult
-            })))==4 # 승자가 단 한 명뿐이고, 팀이 없는 경우
+            }))) == 4  # 승자가 단 한 명뿐이고, 팀이 없는 경우
             main_winner = (
                 first_winner.role().__class__
                 if first_winner.role().__class__.team() in {roles.NeutralBenign, roles.NeutralEvil}
@@ -865,10 +1085,10 @@ class Room:
             "setup": self.setup.jsonablify() if self.setup else self.setup,
             "phase": self.phase().name,
             "members": [m.username for m in self.members],
-            "lineup": {i:m.nickname for i, m in self.lineup.items()} if self.in_game() else None,
+            "lineup": {i: m.nickname for i, m in self.lineup.items()} if self.in_game() else None,
             "graveyard": [p.index for p in self.graveyard] if self.in_game() else None
         }
-    
+
     def in_game(self):
         return self.phase() is not PhaseType.IDLE
 
@@ -886,13 +1106,15 @@ class Room:
                                 in remaining
                                 if NE.role().belongs_to(roles.NeutralEvil)
                                 and not NE.role().belongs_to(roles.NeutralKilling)
-                                and not NE.role().belongs_to(roles.Cult)], # 중살 이교 제외 중악만.
+                                and not NE.role().belongs_to(roles.Cult)],  # 중살 이교 제외 중악만.
         }
-        there_is_NK = self.there_is[roles.Arsonist]+self.there_is[roles.SerialKiller]+self.there_is[roles.MassMurderer]
+        there_is_NK = self.there_is[roles.Arsonist] + \
+            self.there_is[roles.SerialKiller]+self.there_is[roles.MassMurderer]
         if len(remaining) < 3:
             return True
         if self.there_is[roles.Town]:
-            return list(self.there_is.values()).count([]) == len(self.there_is) - 1 # 시민만 있다면
+            # 시민만 있다면
+            return list(self.there_is.values()).count([]) == len(self.there_is) - 1
         if self.there_is[roles.Mafia]:
             return not self.there_is[roles.Triad] and not self.there_is[roles.Cult] and not there_is_NK
         if self.there_is[roles.Triad]:
@@ -900,8 +1122,9 @@ class Room:
         if self.there_is[roles.Cult]:
             return not there_is_NK
         if there_is_NK:
-            return len({NK.role().__class__.team() for NK in there_is_NK}) < 3 # 중살만 남았는데 3파전 이상이 아니라면
-        return True # 중선들만 남았다면
+            # 중살만 남았는데 3파전 이상이 아니라면
+            return len({NK.role().__class__.team() for NK in there_is_NK}) < 3
+        return True  # 중선들만 남았다면
 
     def win_them_all(self, category: Union[Type[roles.Slot], Type[roles.Role]], include_dead: bool):
         """직업이 `category`에 속하는 `Player`들을 승리시킵니다.
@@ -925,7 +1148,8 @@ class Room:
         else:
             for i, r in self.remaining().items():
                 if r.role().belongs_to(roles.Mason):
-                    converting_coros.append(r.be(roles.MasonLeader(r, self.setup.constraints[roles.MasonLeader])))
+                    converting_coros.append(r.be(roles.MasonLeader(
+                        r, self.setup.constraints[roles.MasonLeader])))
                     break
         for criminals in {roles.Mafia, roles.Triad}:
             if team := self.private_chat[criminals]:
@@ -935,23 +1159,26 @@ class Room:
                 else:
                     for C in team:
                         if C.role().belongs_to(roles.IdentityInvestigating) and C.role().constraints[roles.ConstraintKey.PROMOTED]:
-                            converting_coros.append(C.be(match[criminals][BOSS](C, self.setup.constraints[match[criminals][BOSS]])))
+                            converting_coros.append(C.be(match[criminals][BOSS](
+                                C, self.setup.constraints[match[criminals][BOSS]])))
                             break
                     else:
                         promoted = self.private_chat[criminals][0]
-                        converting_coros.append(promoted.be(match[criminals][INTERN](promoted, self.setup.constraints[match[criminals][INTERN]])))
+                        converting_coros.append(promoted.be(match[criminals][INTERN](
+                            promoted, self.setup.constraints[match[criminals][INTERN]])))
         converting_coros.extend(
-            counsel.be(roles.Scumbag(counsel, self.setup.constraints[roles.Scumbag]))
+            counsel.be(roles.Scumbag(
+                counsel, self.setup.constraints[roles.Scumbag]))
             for counsel in self.remaining().values()
             if counsel.role().belongs_to(roles.Counsel)
             and r.role().goal_target.intersection(self.executed)
         )
         await asyncio.gather(*converting_coros)
-        if not self.executed: # 사형이 있은 날에는 감금 불가.
+        if not self.executed:  # 사형이 있은 날에는 감금 불가.
             for jailor in self.jail_queue:
                 if not jailor.jailed_by:
                     if jailor.role().want_to_jail.jailed_by:
-                        pass # TODO
+                        pass  # TODO
                     else:
                         for m, data in jailor.role().jail(jailor.role().want_to_jail)[roles.AbilityResultKey.INDIVIDUAL].items():
                             await self.emit(Event(EventType.ABILITY_RESULT, m, jsonablify(data)))
@@ -993,9 +1220,9 @@ class Room:
             # 이제 방문자 전부 확정됨.
             roles.Framer,
             roles.Forger,
-            roles.Arsonist, # 기름칠
+            roles.Arsonist,  # 기름칠
             roles.Doctor,
-            roles.WitchDoctor, # 치료
+            roles.WitchDoctor,  # 치료
             roles.Bodyguard,
             # 살인 시작.
             roles.Veteran,
@@ -1008,10 +1235,10 @@ class Room:
             roles.Enforcer,
             roles.DragonHead,
             roles.SerialKiller,
-            roles.Arsonist, # 점화
-            roles.MasonLeader, # 이교도 살인
+            roles.Arsonist,  # 점화
+            roles.MasonLeader,  # 이교도 살인
             roles.MassMurderer,
-            roles.Witch, # 저주
+            roles.Witch,  # 저주
             SUICIDE,
             # 시체 훼손
             roles.Janitor,
@@ -1029,11 +1256,11 @@ class Room:
             roles.Spy,
             roles.Investigator,
             roles.Auditor,
-            roles.MasonLeader, # 영입
+            roles.MasonLeader,  # 영입
             roles.Cultist,
-            roles.WitchDoctor, # 개종
-            roles.Godfather, # 영입
-            roles.DragonHead, # 영입
+            roles.WitchDoctor,  # 개종
+            roles.Godfather,  # 영입
+            roles.DragonHead,  # 영입
             roles.Amnesiac,
             roles.Blackmailer,
             roles.Silencer,
@@ -1058,7 +1285,7 @@ class Room:
                             await asyncio.sleep(1)
                 for left in self.leavers:
                     await self.emit(Event(EventType.SOUND, self.members, {roles.AbilityResultKey.SOUND.name: SUICIDE}))
-                    await left.die("leave") # 치료 불가
+                    await left.die("leave")  # 치료 불가
                 self.leavers.clear()
                 self.suiciders.clear()
             else:
@@ -1095,19 +1322,22 @@ class Room:
                             events = actor.role().second_task(self.day)
                     elif actor.visits[self.day] or actor.act[self.day]:
                         if determined := actor.visits[self.day]:
-                            if actor.role().opportunity is not None and actor.role().opportunity <= 0: # 기회가 없는데 방문하도록 조종당하면
-                                events = roles.Visiting.visit(actor.role(), self.day, determined)
+                            if actor.role().opportunity is not None and actor.role().opportunity <= 0:  # 기회가 없는데 방문하도록 조종당하면
+                                events = roles.Visiting.visit(
+                                    actor.role(), self.day, determined)
                             else:
                                 events = actor.role().visit(self.day, determined)
                         else:
                             events = actor.role().act(self.day)
                     else:
                         events = actor.role().action_when_inactive(self.day)
-                    if not events: continue
+                    if not events:
+                        continue
                     for e in events if isinstance(events, list) else [events]:
                         if sound := e.get(roles.AbilityResultKey.SOUND):
                             affected = e[roles.AbilityResultKey.INDIVIDUAL].keys()
-                            listening = set(self.members).difference({p.user for p in affected})
+                            listening = set(self.members).difference(
+                                {p.user for p in affected})
                             await asyncio.gather(*[self.emit(Event(EventType.SOUND, m, {
                                 roles.AbilityResultKey.SOUND.name: sound if isinstance(sound, str) else sound.__name__,
                                 roles.AbilityResultKey.LENGTH.name: e.get(roles.AbilityResultKey.LENGTH),
@@ -1128,13 +1358,15 @@ class Room:
                             elif result_type is roles.AbilityResultKey.CONVERTED:
                                 await m.be(data[roles.AbilityResultKey.INTO](m, self.setup.constraints[data[roles.AbilityResultKey.INTO]]), jsonablify(data))
                                 if data.get("notes") is roles.Amnesiac and m.visits[self.day].role().opportunity is not None:
-                                    m.role().opportunity = m.visits[self.day].role().opportunity or 1
+                                    m.role().opportunity = m.visits[self.day].role(
+                                    ).opportunity or 1
                             else:
                                 await self.emit(Event(EventType.ABILITY_RESULT, m, jsonablify(data)))
                         worked_roles.add(actor.role())
                 done.add(role)
         await asyncio.gather(*[
-            self.emit(Event(EventType.ABILITY_RESULT, spy, jsonablify(spy.role().after_night()[roles.AbilityResultKey.INDIVIDUAL][spy])))
+            self.emit(Event(EventType.ABILITY_RESULT, spy, jsonablify(
+                spy.role().after_night()[roles.AbilityResultKey.INDIVIDUAL][spy])))
             for spy in self.private_chat[roles.Spy]
         ])
         for worked in worked_roles:
@@ -1171,12 +1403,12 @@ class Room:
                 if self.in_game() and self.phase() is not PhaseType.INITIATING and self.elected
                 else None,
         }, no_record=into is PhaseType.INITIATING or into is PhaseType.IDLE))
-        await broadcast_room_status_change(self)
+        await self.broadcaster.room_status_change(self)
 
     def find_player_by_index(self, index: int):
         """`index`번 플레이어를 가져옵니다."""
         return self.lineup[index]
-    
+
     async def submit_nickname(self, user: User, nickname: str):
         self.submitted_nickname[user] = nickname
         await self.emit(Event(EventType.NICKNAME_CONFIRMED, self.members, {"nickname": nickname}))
@@ -1191,13 +1423,13 @@ class Room:
             data = {
                 "type": e.type.name,
                 "content": e.content,
-                "from": e.from_.username if e.from_ else None, # TODO: username을 unique id로 대체
+                "from": e.from_.username if e.from_ else None,  # TODO: username을 unique id로 대체
                 "to": [
                     m.username
                     if isinstance(m, User)
                     else m.user.username
                     for m in e.to
-                ], # TODO: username을 unique id로 대체
+                ],  # TODO: username을 unique id로 대체
                 "time": time.time()
             }
             self.record.append(data)
@@ -1206,15 +1438,18 @@ class Room:
             "content": e.content,
         }) for member in e.to])
 
+
 class GameData:
     """게임 기록입니다. 메타데이터를 포함합니다."""
+
     def __init__(self, room: Room):
         self.title = room.title
         self.private = room.password is not None
         self.lineup = room.lineup
         self.setup = room.setup
         self.record = room.record[:]
-        self.rank_mode = False # TODO
+        self.rank_mode = False  # TODO
+
 
 class User:
     """유저 오브젝트.
@@ -1238,14 +1473,14 @@ class User:
 
     def __repr__(self):
         return f"<User [{self.username}]>"
-    
+
     def __eq__(self, other: User):
         if isinstance(other, User):
             return self.username == other.username
         return NotImplemented
-    
+
     def __hash__(self):
-        return self.username # TODO
+        return self.username  # TODO
 
     async def enter(self, room: Room):
         self.room = room
@@ -1254,10 +1489,10 @@ class User:
         room_info = room.get_room_ingame_info()
         if room.in_game():
             room.hell.append(self)
-        enter_notice = {"who": self.username} # TODO: unique ID도 알려줌
+        enter_notice = {"who": self.username}  # TODO: unique ID도 알려줌
         await room.emit(Event(EventType.GAME_INFO, self, jsonablify(room_info)))
         await room.emit(Event(EventType.ENTER, room.members, enter_notice))
-        await broadcast_room_status_change(self.room)
+        await self.room.broadcaster.room_status_change(self.room)
 
     async def leave(self):
         """방을 나갑니다. 더 이상 `user.room`으로 방에 접근할 수 없습니다.
@@ -1282,17 +1517,18 @@ class User:
             await left.emit(Event(EventType.LEAVE, left.members, {"who": self.username}))
         self.room = None
         logger.debug(f"{self} leaves room #{left.id}")
-        await broadcast_room_status_change(left)
+        await left.broadcaster.room_status_change(left)
 
     async def speak(self, msg: str):
         """`msg`가 말이라면 말을 하고, `/`로 시작하는 명령어라면 명령어를 처리합니다.
         `\\n`과 같은 공백 문자는 다 단칸 공백(`" "`)으로 대체됩니다. 이는 받는 사람을 보호하기 위함입니다.
         `msg`는 처리되기 전에 `msg = msg[:128].strip()`을 먼저 거칩니다."""
-        msg = msg[:128].strip() # 최대 글자수
+        msg = msg[:128].strip()  # 최대 글자수
         for c in string.whitespace:
             msg = msg.replace(c, " ")
         msg = msg.strip()
-        if not msg: return
+        if not msg:
+            return
         room = self.room
         if room.in_game():
             event = None
@@ -1310,7 +1546,8 @@ class User:
                     ContentKey.MESSAGE: msg,
                     "hell": True
                 }
-                event = Event(EventType.MESSAGE, room.hell, jsonablify(content), self)
+                event = Event(EventType.MESSAGE, room.hell,
+                              jsonablify(content), self)
             if event:
                 if not isinstance(event, list):
                     event = [event]
@@ -1319,20 +1556,24 @@ class User:
             if is_command(msg, Command.SLASH):
                 pass
             else:
-                content = {ContentKey.FROM: self.username, ContentKey.MESSAGE: msg}
+                content = {ContentKey.FROM: self.username,
+                           ContentKey.MESSAGE: msg}
                 await room.emit(Event(EventType.MESSAGE, room.members, content, self))
                 logger.debug(f"[{room.id}] {self.username}: {msg}")
 
     async def listen(self, data: dict):
         try:
             await self.ws.send_json(data)
-        except TypeError: # JSON 변환 불가
+        except TypeError:  # JSON 변환 불가
             raise
-        except (RuntimeError, ConnectionClosed): # 나간 경우. 이때는 그냥 ws_endpoint의 finally까지 기다리기만 하면 됩니다.
+        # 나간 경우. 이때는 그냥 ws_endpoint의 finally까지 기다리기만 하면 됩니다.
+        except (RuntimeError, ConnectionClosed):
             pass
+
 
 class Player:
     """인게임 플레이어. 시체를 겸합니다."""
+
     def __init__(self,
                  user: User,
                  nickname: str,
@@ -1344,10 +1585,11 @@ class Player:
         self.index = index
         self.nickname = nickname
         self.room = room
-        self._role_record: list[Union[roles.Role, roles.Slot]] = [role(self, constraints)]
+        self._role_record: list[Union[roles.Role, roles.Slot]] = [
+            role(self, constraints)]
         self.has_left = False
         self.lw = ""
-        self.crimes = {c:False for c in CrimeType}
+        self.crimes = {c: False for c in CrimeType}
         self.visits: list[Union[None, Player]] = [None, None]
         self.visited_by: list[set[Player]] = [None, set()]
         self.bodyguarded_by: list[Player] = []
@@ -1366,7 +1608,7 @@ class Player:
         self.blackmailed_on = 0
         self.cause_of_death = []
         self.dead_sanitized = False
-    
+
     def __repr__(self) -> str:
         return f"<{self.user}'s Player #{self.index} as {self.role()} {'alive' if self.alive() else 'dead'}"
 
@@ -1375,7 +1617,7 @@ class Player:
 
     def role(self):
         return self._role_record[-1]
-    
+
     def is_healed(self):
         return self.role().healable and self.healed_by
 
@@ -1384,7 +1626,7 @@ class Player:
 
     async def join_private_chat(self, group: Type[roles.Role]):
         self.room.private_chat[group].append(self)
-    
+
     async def leave_private_chat(self, group: Type[roles.Role]):
         self.room.private_chat[group].remove(self)
 
@@ -1407,7 +1649,8 @@ class Player:
         content = {
             ContentKey.WHAT: self.role().name,
             ContentKey.OPPORTUNITY: self.role().opportunity,
-            ContentKey.GOAL_TARGET: sorted([p.index for p in self.role().goal_target]) or None
+            ContentKey.GOAL_TARGET: sorted(
+                [p.index for p in self.role().goal_target]) or None
         }
         if existing_group:
             for_team = {
@@ -1415,8 +1658,10 @@ class Player:
                 ContentKey.WHO: self.index,
             }
             await asyncio.gather(*[
-                self.room.emit(Event(EventType.EMPLOYED, self, jsonablify(content))),
-                self.room.emit(Event(EventType.EMPLOYED, self.room.private_chat[existing_group], for_team))
+                self.room.emit(
+                    Event(EventType.EMPLOYED, self, jsonablify(content))),
+                self.room.emit(
+                    Event(EventType.EMPLOYED, self.room.private_chat[existing_group], for_team))
             ])
         else:
             await self.room.emit(Event(EventType.EMPLOYED, self, jsonablify(content)))
@@ -1447,7 +1692,7 @@ class Player:
                 or voted.voted_count > len(self.room.remaining()) / 2
             ):
                 self.room.election.set()
-    
+
     async def cancel_vote(self, skip=False):
         """투표를 취소합니다. `skip==True`면 생략 투표를 취소합니다."""
         if self.room.phase() is PhaseType.VOTE_EXECUTION:
@@ -1464,21 +1709,21 @@ class Player:
                 "index": None if self.room.in_court else self.index,
                 "skip_count": self.room.skip_votes
             }))]*self.role().votes)
-    
+
     async def die(self, cause: str):
         logger.debug(f"{self} dies in {self.room}")
         self.cause_of_death.append(cause)
         await self.room.emit(Event(EventType.DEAD, self, {"cause": cause}))
-    
+
     def win(self):
         self.room.winners.append((self, self.role()))
-    
+
     def commit_crime(self, crime: CrimeType):
         self.crimes[crime] = True
-    
+
     def write_lw(self, lw: str):
         self.lw = lw
-    
+
     async def speak(self, msg: str):
         room = self.room
         event = None
@@ -1486,17 +1731,20 @@ class Player:
             if is_command(msg, Command.SLASH):
                 if is_command(msg, Command.SUICIDE):
                     self.will_suicide = not self.will_suicide
-                    event = self._make_event(EventType.SUICIDE, self, {ContentKey.WILL: self.will_suicide})
+                    event = self._make_event(EventType.SUICIDE, self, {
+                                             ContentKey.WILL: self.will_suicide})
                 elif is_command(msg, Command.VISIT):
-                    pass # TODO
+                    pass  # TODO
             else:
-                event = self._make_event(EventType.ERROR, self, {ContentKey.REASON: "협박당해 말을 할 수 없습니다."})
+                event = self._make_event(EventType.ERROR, self, {
+                                         ContentKey.REASON: "협박당해 말을 할 수 없습니다."})
         else:
             phase = room.phase()
             if phase is PhaseType.MORNING:
                 if is_command(msg, Command.SLASH):
                     if is_command(msg, Command.PM) and not room.in_court:
-                        received = room.find_player_by_index(int(msg.split()[1]))
+                        received = room.find_player_by_index(
+                            int(msg.split()[1]))
                         if received is not self:
                             event = self.make_message_event(msg, pm=True)
                     elif is_command(msg, Command.JAIL) and self.role().belongs_to(roles.Jailing):
@@ -1508,7 +1756,8 @@ class Player:
             elif phase is PhaseType.DISCUSSION:
                 if is_command(msg, Command.SLASH):
                     if is_command(msg, Command.PM) and not room.in_court:
-                        received = room.find_player_by_index(int(msg.split()[1]))
+                        received = room.find_player_by_index(
+                            int(msg.split()[1]))
                         if received is not self:
                             event = self.make_message_event(msg, pm=True)
                     elif is_command(msg, Command.COURT) or is_command(msg, Command.LYNCH) or is_command(msg, Command.MAYOR):
@@ -1532,7 +1781,8 @@ class Player:
                         if voted is not self:
                             await self.vote(voted)
                     elif is_command(msg, Command.PM) and not room.in_court:
-                        received = room.find_player_by_index(int(msg.split()[1]))
+                        received = room.find_player_by_index(
+                            int(msg.split()[1]))
                         if received is not self:
                             event = self.make_message_event(msg, pm=True)
                     elif is_command(msg, Command.COURT) and self.role().can_activate():
@@ -1560,13 +1810,15 @@ class Player:
             elif phase is PhaseType.DEFENSE:
                 if is_command(msg, Command.SLASH):
                     if is_command(msg, Command.JAIL) and self.role().belongs_to(roles.Jailing):
-                        event = self._make_jail_event(room.find_player_by_index(int(msg.split()[1])))
+                        event = self._make_jail_event(
+                            room.find_player_by_index(int(msg.split()[1])))
                 elif room.elected is self:
                     event = self.make_message_event(msg)
             elif phase is PhaseType.VOTE_EXECUTION:
                 if is_command(msg, Command.SLASH):
                     if is_command(msg, Command.PM) and not room.in_court:
-                        received = room.find_player_by_index(int(msg.split()[1]))
+                        received = room.find_player_by_index(
+                            int(msg.split()[1]))
                         if received is not self:
                             event = self.make_message_event(msg, pm=True)
                     elif is_command(msg, Command.MAYOR) and self.role().can_activate():
@@ -1586,11 +1838,12 @@ class Player:
             elif phase is PhaseType.POST_EXECUTION and not room.in_court and not room.in_lynch:
                 if is_command(msg, Command.SLASH):
                     if is_command(msg, Command.PM) and not room.in_court:
-                        received = room.find_player_by_index(int(msg.split()[1]))
+                        received = room.find_player_by_index(
+                            int(msg.split()[1]))
                         if received is not self:
                             event = self.make_message_event(msg, pm=True)
                     elif is_command(msg, Command.MAYOR) and self.role().can_activate():
-                        pass # TODO
+                        pass  # TODO
                 else:
                     event = self.make_message_event(msg)
             elif phase is PhaseType.EVENING:
@@ -1600,8 +1853,10 @@ class Player:
                             pass
                     # 이하로는 수감 시 사용 불가능한 명령어
                     elif room.day <= self.role().rest_till:
-                        content = {ContentKey.ROLE: self.role().name, ContentKey.REASON: f"{self.role().rest_till}일째 밤까지 쉬어야 합니다."}
-                        event = self._make_event(EventType.ERROR, self, content)
+                        content = {ContentKey.ROLE: self.role(
+                        ).name, ContentKey.REASON: f"{self.role().rest_till}일째 밤까지 쉬어야 합니다."}
+                        event = self._make_event(
+                            EventType.ERROR, self, content)
                         # 이 이하로는 DELAY에 영향을 받는 행동.
                     elif is_command(msg, Command.VISIT) and self.role().belongs_to(roles.Visiting) and (self.role().opportunity is None or self.role().opportunity > 0):
                         splitted = msg.split()
@@ -1610,32 +1865,39 @@ class Player:
                         elif len(splitted) == 2:
                             target_index = int(splitted[1])
                         else:
-                            target_index, second_index = map(int, splitted[1:3])
+                            target_index, second_index = map(
+                                int, splitted[1:3])
                         target = room.find_player_by_index(target_index)
                         if self.role().for_dead:
                             if target.death_announced():
                                 if self.role().belongs_to(roles.Amnesiac) and target.role().unique:
                                     pass
                                 else:
-                                    event = self.visit_and_make_visit_event(target)
+                                    event = self.visit_and_make_visit_event(
+                                        target)
                         else:
                             if self.role().belongs_to(roles.Witch):
                                 if second_target := room.find_player_by_index(second_index):
-                                    event = self.visit_and_make_visit_event(target, second_target)
+                                    event = self.visit_and_make_visit_event(
+                                        target, second_target)
                             elif self.role().belongs_to(roles.Visiting) and not self.role().for_dead:
                                 if target is self:
                                     if self.role().can_target_self:
-                                        event = self.visit_and_make_visit_event(target)
+                                        event = self.visit_and_make_visit_event(
+                                            target)
                                 elif (self.role().belongs_to(roles.KillingVisiting)
-                                    and room.private_chat.get(self.role().__class__.team())
-                                    and room.private_chat[self.role().__class__.team()] is room.private_chat.get(target.role().__class__.team())):
+                                      and room.private_chat.get(self.role().__class__.team())
+                                      and room.private_chat[self.role().__class__.team()] is room.private_chat.get(target.role().__class__.team())):
                                     pass
                                 else:
-                                    event = self.visit_and_make_visit_event(target)
+                                    event = self.visit_and_make_visit_event(
+                                        target)
                     elif is_command(msg, Command.ACT):
                         if self.role().belongs_to(roles.ActiveAndVisiting) and not self.role().can_at_the_same_time and self.visits[room.day]:
-                            content = {ContentKey.ROLE: self.role().name, ContentKey.REASON: "하루에 고유 능력을 사용하거나 방문하거나 둘 중 하나만 할 수 있습니다."}
-                            event = self._make_event(EventType.ERROR, self, content)
+                            content = {ContentKey.ROLE: self.role(
+                            ).name, ContentKey.REASON: "하루에 고유 능력을 사용하거나 방문하거나 둘 중 하나만 할 수 있습니다."}
+                            event = self._make_event(
+                                EventType.ERROR, self, content)
                         elif self.role().opportunity > 0 and (not self.role().belongs_to(roles.Jailing) or self.role().is_jailing()):
                             self.act[room.day] = not self.act[room.day]
                             content = {
@@ -1646,41 +1908,60 @@ class Player:
                             }
                             event = self._make_event(
                                 EventType.ACT,
-                                [self.role().is_jailing()] + room.private_chat[self.role().__class__.team()]
+                                [self.role().is_jailing()] +
+                                room.private_chat[self.role().__class__.team()]
                                 if self.role().belongs_to(roles.Jailing) and self.role().__class__.team() in room.private_chat
                                 else [self, self.role().is_jailing()],
                                 content
                             )
                     elif is_command(msg, Command.RECRUIT) and self.role().belongs_to(roles.Boss):
-                        self.role().recruit_target = room.find_player_by_index(int(msg.split()[1]))
+                        self.role().recruit_target = room.find_player_by_index(
+                            int(msg.split()[1]))
                         self.role().do_second_task_today = True
-                        content = {ContentKey.ROLE: self.role().name, ContentKey.TARGET: self.role().recruit_target.index}
-                        event = self._make_event(EventType.SECOND_VISIT, room.private_chat[self.role().__class__.team()], content)
+                        content = {ContentKey.ROLE: self.role(
+                        ).name, ContentKey.TARGET: self.role().recruit_target.index}
+                        event = self._make_event(
+                            EventType.SECOND_VISIT, room.private_chat[self.role().__class__.team()], content)
                 elif jailing := self.jailed_by:
                     if team := room.private_chat.get(jailing.role().__class__.team()):
-                        content = {ContentKey.FROM: self.index, ContentKey.MESSAGE: msg}
-                        event = [self._make_event(EventType.MESSAGE, [self]+team, content)]
+                        content = {ContentKey.FROM: self.index,
+                                   ContentKey.MESSAGE: msg}
+                        event = [self._make_event(
+                            EventType.MESSAGE, [self]+team, content)]
                         # content[ContentKey.FROM] = "수감자"
                         # event.append(self._make_event(EventType.MESSAGE, room.private_chat[roles.Spy], content=content)) # 정보원 상향
                     else:
-                        content = {ContentKey.FROM: self.index, ContentKey.MESSAGE: msg}
-                        event = self._make_event(EventType.MESSAGE, [self, jailing.index], content)
+                        content = {ContentKey.FROM: self.index,
+                                   ContentKey.MESSAGE: msg}
+                        event = self._make_event(
+                            EventType.MESSAGE, [self, jailing.index], content)
                 elif self.role().belongs_to(roles.Jailing):
                     if jailed := self.role().is_jailing():
-                        for_jailed = {ContentKey.FROM: roles.Jailor.__name__, ContentKey.MESSAGE: msg, ContentKey.SHOW_ROLE_NAME: True}
-                        event = [self._make_event(EventType.MESSAGE, jailed, for_jailed)]
-                        for_jailing = {ContentKey.FROM: self.index, ContentKey.MESSAGE: msg}
-                        to = room.private_chat.get(self.role().__class__.team()) or self
-                        event.append(self._make_event(EventType.MESSAGE, to, for_jailing))
+                        for_jailed = {ContentKey.FROM: roles.Jailor.__name__,
+                                      ContentKey.MESSAGE: msg, ContentKey.SHOW_ROLE_NAME: True}
+                        event = [self._make_event(
+                            EventType.MESSAGE, jailed, for_jailed)]
+                        for_jailing = {
+                            ContentKey.FROM: self.index, ContentKey.MESSAGE: msg}
+                        to = room.private_chat.get(
+                            self.role().__class__.team()) or self
+                        event.append(self._make_event(
+                            EventType.MESSAGE, to, for_jailing))
                 elif team_chat := room.private_chat.get(self.role().__class__.team()):
-                    content = {ContentKey.FROM: self.index, ContentKey.MESSAGE: msg}
-                    event = [self._make_event(EventType.MESSAGE, team_chat, content)]
+                    content = {ContentKey.FROM: self.index,
+                               ContentKey.MESSAGE: msg}
+                    event = [self._make_event(
+                        EventType.MESSAGE, team_chat, content)]
                     if self.role().__class__.team() in {roles.Mafia, roles.Triad}:
-                        content2 = {ContentKey.FROM: self.role().__class__.team().__name__, ContentKey.MESSAGE: msg, ContentKey.SHOW_ROLE_NAME: True}
-                        event.append(self._make_event(EventType.MESSAGE, room.private_chat[roles.Spy], content2))
+                        content2 = {ContentKey.FROM: self.role().__class__.team(
+                        ).__name__, ContentKey.MESSAGE: msg, ContentKey.SHOW_ROLE_NAME: True}
+                        event.append(self._make_event(
+                            EventType.MESSAGE, room.private_chat[roles.Spy], content2))
                 elif self.role().belongs_to(roles.Crying):
-                    content = {ContentKey.FROM: roles.Crier.__name__, ContentKey.MESSAGE: msg, ContentKey.SHOW_ROLE_NAME: True}
-                    event = self._make_event(EventType.MESSAGE, room.members, content)
+                    content = {ContentKey.FROM: roles.Crier.__name__,
+                               ContentKey.MESSAGE: msg, ContentKey.SHOW_ROLE_NAME: True}
+                    event = self._make_event(
+                        EventType.MESSAGE, room.members, content)
             elif phase is PhaseType.NIGHT:
                 content = {ContentKey.REASON: "사건이 일어나는 밤에는 아무것도 할 수 없습니다."}
                 event = self._make_event(EventType.ERROR, self, content)
@@ -1692,7 +1973,7 @@ class Player:
         self.act.append(False)
         self.healed_by.clear()
         self.bodyguarded_by.clear()
-    
+
     def _make_event(self,
                     event_type: EventType,
                     to: Union[Player, User, list[Union[Player, User, int]]],
@@ -1702,11 +1983,11 @@ class Player:
         else:
             content = jsonablify(content)
         return Event(event_type,
-            [to] if isinstance(to, Player) or isinstance(to, User)
-            else [self.room.lineup[r] if isinstance(r, int) else r for r in to],
-            content,
-            self)
-    
+                     [to] if isinstance(to, Player) or isinstance(to, User)
+                     else [self.room.lineup[r] if isinstance(r, int) else r for r in to],
+                     content,
+                     self)
+
     def _make_jail_event(self, target: Player):
         self.role().want_to_jail = target
         if self in self.room.jail_queue:
@@ -1716,8 +1997,8 @@ class Player:
             ContentKey.ROLE: self.role().name,
             ContentKey.TARGET: target.index
         }))
-    
-    def visit_and_make_visit_event(self, target: Player, second: Optional[Player]=None):
+
+    def visit_and_make_visit_event(self, target: Player, second: Optional[Player] = None):
         self.visits[self.room.day] = target
         content = {
             ContentKey.FROM: self.index,
@@ -1730,8 +2011,8 @@ class Player:
         teammates = self.room.private_chat.get(self.role().__class__.team())
         event = self._make_event(EventType.VISIT, teammates or self, content)
         return event
-    
-    def make_message_event(self, msg: str, pm: bool=False):
+
+    def make_message_event(self, msg: str, pm: bool = False):
         """인게임 메시지 이벤트를 만듭니다.
 
         Parameters:
@@ -1743,7 +2024,8 @@ class Player:
             for_to = {ContentKey.MESSAGE: msg, ContentKey.FROM: self.index}
             for_from = {ContentKey.MESSAGE: msg, ContentKey.TO: to}
             events = [
-                self._make_event(EventType.PM, self.room.find_player_by_index(int(to)), for_to),
+                self._make_event(
+                    EventType.PM, self.room.find_player_by_index(int(to)), for_to),
                 self._make_event(EventType.PM_SENT, self, for_from)
             ]
             return events
