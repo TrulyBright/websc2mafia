@@ -16,7 +16,7 @@ export default {
   },
   created: function() {
     console.log("Connection To WebSocket Server");
-    this.connection = new WebSocket("ws://localhost:8000/game");
+    this.connection = new WebSocket("ws://"+location.host+"/game");
     this.connection.onmessage = function(event) {
       console.log(event);
     }
